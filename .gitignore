@@ -1,0 +1,51 @@
+# macOS
+.DS_Store
+
+# .NET build artifacts
+[Bb]in/
+[Oo]bj/
+[Oo]ut/
+[Ll]og/
+[Ll]ogs/
+*.user
+*.suo
+*.userosscache
+*.sln.docstates
+*.userprefs
+
+# Visual Studio / Rider / VS Code
+.vs/
+.vscode/
+.idea/
+*.swp
+
+# NuGet
+*.nupkg
+*.snupkg
+packages/
+.nuget/
+project.lock.json
+project.fragment.lock.json
+artifacts/
+
+# Test/coverage
+TestResults/
+coverage*.xml
+*.coverage
+*.coveragexml
+
+# EF Core
+*.mdf
+*.ldf
+
+# Node / Vite (web)
+node_modules/
+dist/
+.vite/
+.cache/
+*.local
+
+# Env files
+.env
+.env.*
+!.env.example
