@@ -1,0 +1,29 @@
+@model ReleaseTaskDto
+@{
+    ViewData["Title"] = Model.Title;
+}
+<p><a asp-action="Index">&larr; Back to list</a></p>
+<h2 class="mb-1">@Model.Title</h2>
+<p class="text-muted">
+    State: <span class="badge bg-secondary badge-state">@Model.State</span>
+    @if (Model.AdoWorkItemId.HasValue)
+    {
+        <span> &middot; ADO #@Model.AdoWorkItemId</span>
+    }
+</p>
+
+<div class="card shadow-sm mb-3">
+    <div class="card-body">
+        <h5 class="card-title">Scope</h5>
+        <pre class="scope">@Model.Description</pre>
+    </div>
+</div>
+
+<div class="card shadow-sm">
+    <div class="card-body">
+        <h5 class="card-title">Metadata</h5>
+        <div>Created by: @Model.CreatedByEmail</div>
+        <div>Created at: @Model.CreatedAt.ToLocalTime().ToString("yyyy-MM-dd HH:mm")</div>
+        <div>Updated at: @Model.UpdatedAt.ToLocalTime().ToString("yyyy-MM-dd HH:mm")</div>
+    </div>
+</div>

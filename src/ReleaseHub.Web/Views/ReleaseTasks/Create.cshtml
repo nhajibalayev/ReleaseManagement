@@ -1,0 +1,27 @@
+@model CreateReleaseTaskFormModel
+@{
+    ViewData["Title"] = "Create release task";
+}
+<h2>Create release task</h2>
+<form method="post" asp-action="Create" class="card shadow-sm p-3">
+    @Html.AntiForgeryToken()
+    <div asp-validation-summary="ModelOnly" class="text-danger small"></div>
+
+    <div class="mb-3">
+        <label asp-for="Title" class="form-label"></label>
+        <input asp-for="Title" class="form-control" placeholder="e.g. June 2026 production release" />
+        <span asp-validation-for="Title" class="text-danger small"></span>
+    </div>
+
+    <div class="mb-3">
+        <label asp-for="Description" class="form-label">Scope &mdash; which projects/components are being released, with versions</label>
+        <textarea asp-for="Description" class="form-control" rows="8"
+                  placeholder="Describe each project, version, change summary..."></textarea>
+        <span asp-validation-for="Description" class="text-danger small"></span>
+    </div>
+
+    <div class="d-flex gap-2">
+        <button type="submit" class="btn btn-primary">Create</button>
+        <a asp-action="Index" class="btn btn-outline-secondary">Cancel</a>
+    </div>
+</form>

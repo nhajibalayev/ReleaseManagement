@@ -19,7 +19,7 @@
   </ItemGroup>
 
   <ItemGroup>
-    <ProjectReference Include="..\..\src\ReleaseHub.Api\ReleaseHub.Api.csproj" />
+    <ProjectReference Include="..\..\src\ReleaseHub.Web\ReleaseHub.Web.csproj" />
     <ProjectReference Include="..\..\src\ReleaseHub.Infrastructure\ReleaseHub.Infrastructure.csproj" />
   </ItemGroup>
 
