@@ -6,6 +6,9 @@
 # dotenv files
 .env
 
+# Local restore scratch
+_restore_tmp/
+
 # User-specific files
 *.rsuser
 *.suo
@@ -23,7 +26,8 @@ mono_crash.*
 [Dd]ebug/
 [Dd]ebugPublic/
 [Rr]elease/
-[Rr]eleases/
+# ClickOnce publish folders only — do NOT ignore source folders named Releases/
+/[Rr]eleases/
 x64/
 x86/
 [Ww][Ii][Nn]32/

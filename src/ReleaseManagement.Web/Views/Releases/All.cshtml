@@ -1,0 +1,15 @@
+@model IReadOnlyCollection<ReleaseListItemViewModel>
+@{
+    ViewData["Title"] = "All Releases";
+}
+
+<div class="d-flex justify-content-between align-items-center mb-3">
+    <div>
+        <h1 class="h3 mb-1">All Releases</h1>
+        <p class="text-muted mb-0">Review releases across the platform.</p>
+    </div>
+    <a asp-action="Create" class="btn btn-accent">New release</a>
+</div>
+<section class="panel">
+    <partial name="Partials/_ReleaseListTable" model="Model" />
+</section>

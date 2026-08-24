@@ -1,0 +1,239 @@
+@model ReleaseDetailsPageViewModel
+@{
+    ViewData["Title"] = Model.ReleaseNumber;
+    var approvalType = ReleaseStatusDisplay.MapStatusToApprovalType(Model.Status.CurrentStatus);
+}
+
+<div class="panel">
+    <div class="d-flex flex-wrap justify-content-between gap-3">
+        <div>
+            <div class="text-muted fw-semibold">@Model.ReleaseNumber</div>
+            <h1 class="h3 mb-2">@Model.Title</h1>
+            <span class="status-badge @(Model.Status.ActionRequiredFromCurrentUser ? "action" : "")">@Model.Status.CurrentStatusDisplay</span>
+        </div>
+        <div class="text-md-end">
+            <div><strong>@Model.Priority priority</strong></div>
+            <div class="text-muted">Planned @Model.PlannedReleaseDate.ToLocalTime().ToString("g")</div>
+            <div class="text-muted">Responsible: @(Model.Status.CurrentResponsibleDisplay ?? "Unassigned")</div>
+        </div>
+    </div>
+</div>
+
+@if (Model.Status.ActionRequiredFromCurrentUser)
+{
+    <div class="action-banner">
+        <strong>Action required</strong>
+        <div>This release is waiting for your review or update.</div>
+    </div>
+}
+
+<div class="panel">
+    <dl class="status-summary mb-0">
+        <div><dt>Current status</dt><dd>@Model.Status.CurrentStatusDisplay</dd></div>
+        <div><dt>Responsible</dt><dd>@(Model.Status.CurrentResponsibleDisplay ?? "Unassigned")</dd></div>
+        <div><dt>Status changed</dt><dd>@Model.Status.StatusChangedAtUtc.ToLocalTime().ToString("g")</dd></div>
+        <div><dt>Next stage</dt><dd>@(Model.Status.NextStageDisplay ?? "—")</dd></div>
+        @if (!string.IsNullOrWhiteSpace(Model.Status.ReturnOrRejectReason))
+        {
+            <div><dt>Return / rejection reason</dt><dd>@Model.Status.ReturnOrRejectReason</dd></div>
+            <div><dt>Returned by</dt><dd>@(Model.Status.ReturnedByDisplay ?? "—")</dd></div>
+        }
+    </dl>
+</div>
+
+@if (Model.AllowedTransitions.Any())
+{
+    <section class="panel">
+        <h2 class="h5">Available actions</h2>
+        <div class="row g-3">
+            @foreach (var target in Model.AllowedTransitions)
+            {
+                <div class="col-lg-4">
+                    <form asp-action="Transition" method="post" class="border rounded p-3 h-100">
+                        <input type="hidden" name="ReleaseId" value="@Model.Id" />
+                        <input type="hidden" name="TargetStatus" value="@target" />
+                        <label class="form-label fw-semibold">@ReleaseStatusDisplay.Format(target)</label>
+                        <textarea name="Comment" class="form-control form-control-sm mb-2" rows="2" placeholder="Comment or reason"></textarea>
+                        <button type="submit" class="btn btn-sm btn-accent">Confirm</button>
+                    </form>
+                </div>
+            }
+        </div>
+    </section>
+}
+
+@if (approvalType.HasValue)
+{
+    <section class="panel">
+        <h2 class="h5">Approval decision</h2>
+        <form asp-controller="Approvals" asp-action="Decide" method="post">
+            <input type="hidden" name="ReleaseId" value="@Model.Id" />
+            <input type="hidden" name="ApprovalType" value="@approvalType.Value" />
+            <div class="mb-3">
+                <label for="approval-comment" class="form-label">Decision comment</label>
+                <textarea id="approval-comment" name="Comment" class="form-control" rows="3"></textarea>
+            </div>
+            <div class="d-flex flex-wrap gap-2">
+                <button type="submit" name="Decision" value="@ApprovalStatus.Approved" class="btn btn-success">Approve</button>
+                <button type="submit" name="Decision" value="@ApprovalStatus.ChangesRequired" class="btn btn-warning">Request changes</button>
+                <button type="submit" name="Decision" value="@ApprovalStatus.Rejected" class="btn btn-danger">Reject</button>
+            </div>
+        </form>
+    </section>
+}
+
+<div class="panel">
+    <ul class="nav nav-tabs" id="release-tabs" role="tablist">
+        @foreach (var tab in new[] { "General", "Services", "Approvals", "Comments", "Attachments", "History", "Deployment" })
+        {
+            var id = tab.ToLowerInvariant();
+            <li class="nav-item" role="presentation">
+                <button class="nav-link @(tab == "General" ? "active" : "")" data-bs-toggle="tab" data-bs-target="#@id" type="button">@tab</button>
+            </li>
+        }
+    </ul>
+    <div class="tab-content pt-4">
+        <div class="tab-pane fade show active" id="general">
+            <dl class="status-summary">
+                <div><dt>Product</dt><dd>@(Model.ProductName ?? "—")</dd></div>
+                <div><dt>Environment</dt><dd>@(Model.EnvironmentName ?? "—")</dd></div>
+                <div><dt>Version</dt><dd>@(string.IsNullOrWhiteSpace(Model.ReleaseVersion) ? "—" : Model.ReleaseVersion)</dd></div>
+                <div><dt>Risk level</dt><dd>@Model.RiskLevel</dd></div>
+                <div><dt>Downtime</dt><dd>@(Model.DowntimeRequired ? $"{Model.ExpectedDowntimeMinutes ?? 0} minutes" : "Not required")</dd></div>
+                <div><dt>Azure DevOps</dt><dd>@if (!string.IsNullOrWhiteSpace(Model.AzureDevOpsWorkItemUrl)) { <a href="@Model.AzureDevOpsWorkItemUrl" target="_blank" rel="noopener">Work item @Model.AzureDevOpsWorkItemId</a> } else { <span>—</span> }</dd></div>
+            </dl>
+            @foreach (var item in new[] {
+                ("Description", Model.Description), ("Testing summary", Model.TestingSummary),
+                ("Risk description", Model.RiskDescription), ("Deployment plan", Model.DeploymentPlan),
+                ("Rollback plan", Model.RollbackPlan), ("Monitoring plan", Model.MonitoringPlan),
+                ("Post-release validation", Model.PostReleaseValidationPlan) })
+            {
+                <h3 class="h6 mt-3">@item.Item1</h3>
+                <p class="text-muted" style="white-space: pre-wrap">@(string.IsNullOrWhiteSpace(item.Item2) ? "—" : item.Item2)</p>
+            }
+        </div>
+        <div class="tab-pane fade" id="services">
+            <div class="table-responsive">
+                <table class="table align-middle">
+                    <thead>
+                        <tr>
+                            <th>Service</th>
+                            <th>Branch</th>
+                            <th>Commit</th>
+                            <th>Version / build</th>
+                            <th>Repository</th>
+                            <th>Notes</th>
+                            <th>Changes</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                    @foreach (var service in Model.Services)
+                    {
+                        <tr>
+                            <td>@(string.IsNullOrWhiteSpace(service.ServiceName) ? service.ServiceId.ToString() : service.ServiceName)</td>
+                            <td>@(service.BranchName ?? "—")</td>
+                            <td>@(service.CommitId ?? "—")</td>
+                            <td>@(service.Version ?? "—") / @(service.BuildNumber ?? "—")</td>
+                            <td>
+                                @if (!string.IsNullOrWhiteSpace(service.RepositoryUrl))
+                                {
+                                    <a href="@service.RepositoryUrl" target="_blank" rel="noopener">@service.RepositoryUrl</a>
+                                }
+                                else
+                                {
+                                    <span>—</span>
+                                }
+                            </td>
+                            <td>@(string.IsNullOrWhiteSpace(service.Notes) ? "—" : service.Notes)</td>
+                            <td>@(service.DatabaseChanges ? "Database " : "")@(service.ConfigurationChanges ? "Configuration" : "")@(!(service.DatabaseChanges || service.ConfigurationChanges) ? "—" : "")</td>
+                        </tr>
+                    }
+                    @if (!Model.Services.Any()) { <tr><td colspan="7" class="text-muted">No services added.</td></tr> }
+                    </tbody>
+                </table>
+            </div>
+        </div>
+        <div class="tab-pane fade" id="approvals">
+            <table class="table">
+                <thead><tr><th>Type</th><th>Status</th><th>Requested</th><th>Decision</th><th>Comment</th></tr></thead>
+                <tbody>
+                @foreach (var item in Model.Approvals)
+                {
+                    <tr><td>@item.ApprovalType</td><td>@item.Status</td><td>@item.RequestedDate.ToLocalTime().ToString("g")</td><td>@(item.DecisionDate?.ToLocalTime().ToString("g") ?? "—")</td><td>@(item.Comment ?? "—")</td></tr>
+                }
+                @if (!Model.Approvals.Any()) { <tr><td colspan="5" class="text-muted">No approvals requested.</td></tr> }
+                </tbody>
+            </table>
+        </div>
+        <div class="tab-pane fade" id="comments">
+            <form asp-action="AddComment" method="post" class="mb-4">
+                <input type="hidden" name="ReleaseId" value="@Model.Id" />
+                <label for="new-comment" class="form-label">Add comment</label>
+                <textarea id="new-comment" name="Comment" class="form-control mb-2" rows="3" required></textarea>
+                <button type="submit" class="btn btn-accent">Post comment</button>
+            </form>
+            @foreach (var item in Model.Comments)
+            {
+                <div class="border-top py-3"><strong>@item.Author</strong><span class="text-muted small ms-2">@item.CreatedDate.ToLocalTime().ToString("g")</span><p class="mb-0 mt-1" style="white-space: pre-wrap">@item.Comment</p></div>
+            }
+        </div>
+        <div class="tab-pane fade" id="attachments">
+            <form asp-action="UploadAttachment" method="post" enctype="multipart/form-data" class="row g-2 align-items-end mb-4">
+                <input type="hidden" name="releaseId" value="@Model.Id" />
+                <div class="col-md-8"><label for="attachment" class="form-label">Upload attachment</label><input id="attachment" type="file" name="file" class="form-control" required /></div>
+                <div class="col-md-4"><button type="submit" class="btn btn-accent">Upload</button></div>
+            </form>
+            <table class="table"><tbody>
+            @foreach (var item in Model.Attachments)
+            {
+                <tr><td><a asp-action="DownloadAttachment" asp-route-id="@item.Id">@item.OriginalFileName</a></td><td>@item.ContentType</td><td>@($"{item.FileSize / 1024d:N1} KB")</td><td>@item.UploadedDate.ToLocalTime().ToString("g")</td></tr>
+            }
+            @if (!Model.Attachments.Any()) { <tr><td class="text-muted">No attachments uploaded.</td></tr> }
+            </tbody></table>
+        </div>
+        <div class="tab-pane fade" id="history">
+            <ul class="timeline">
+                @foreach (var item in Model.History)
+                {
+                    <li><strong>@item.FromStatus → @item.ToStatus</strong><div class="small text-muted">@item.ChangedDate.ToLocalTime().ToString("g") · @(item.ResponsibleRole ?? "Unassigned")</div>@if (!string.IsNullOrWhiteSpace(item.Comment)) { <div class="mt-1">@item.Comment</div> }</li>
+                }
+            </ul>
+        </div>
+        <div class="tab-pane fade" id="deployment">
+            @if (Model.Status.CurrentStatus == ReleaseStatus.ReadyForRelease)
+            {
+                <form asp-controller="Deployments" asp-action="Start" method="post">
+                    <input type="hidden" name="id" value="@Model.Id" />
+                    <h3 class="h6">Start deployment</h3>
+                    <div class="row g-2"><div class="col-md-5"><input name="pipelineUrl" class="form-control" placeholder="Pipeline URL" /></div><div class="col-md-4"><input name="buildNumber" class="form-control" placeholder="Build number" /></div><div class="col-md-3"><button class="btn btn-accent" type="submit">Start</button></div></div>
+                </form>
+            }
+            else if (Model.Status.CurrentStatus == ReleaseStatus.DeploymentInProgress)
+            {
+                <div class="row g-4">
+                    <div class="col-lg-6">
+                        <form asp-controller="Deployments" asp-action="Complete" method="post">
+                            <input type="hidden" name="id" value="@Model.Id" />
+                            <h3 class="h6">Complete deployment</h3>
+                            <textarea name="comment" class="form-control mb-2" rows="3" placeholder="Completion notes"></textarea>
+                            <button class="btn btn-success" type="submit">Mark successful</button>
+                        </form>
+                    </div>
+                    <div class="col-lg-6">
+                        <form asp-controller="Deployments" asp-action="Fail" method="post">
+                            <input type="hidden" name="id" value="@Model.Id" />
+                            <h3 class="h6">Record failure</h3>
+                            <textarea name="errorDetails" class="form-control mb-2" rows="3" placeholder="Error details" required></textarea>
+                            <div class="form-check mb-2"><input id="rollback-required" name="rollbackRequired" value="true" type="checkbox" class="form-check-input" /><label for="rollback-required" class="form-check-label">Rollback required</label></div>
+                            <button class="btn btn-danger" type="submit">Mark failed</button>
+                        </form>
+                    </div>
+                </div>
+            }
+            else
+            {
+                <p class="text-muted mb-0">Deployment actions are not available in the current status.</p>
+            }
+        </div>
+    </div>
+</div>

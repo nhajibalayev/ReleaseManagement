@@ -1,0 +1,242 @@
+@model ReleaseWizardViewModel
+@{
+    var formAction = (string?)ViewData["FormAction"] ?? "Create";
+    var stepNames = new[] { "General", "Services", "Testing", "Risk & deployment", "Review" };
+}
+
+<div class="wizard-steps" aria-label="Release wizard progress">
+    @for (var index = 0; index < stepNames.Length; index++)
+    {
+        <span class="wizard-step @(Model.Step == index + 1 ? "active" : "")">@(index + 1). @stepNames[index]</span>
+    }
+</div>
+
+<form action="@Url.Action(formAction, "Releases")" method="post" id="release-wizard-form">
+    @Html.AntiForgeryToken()
+    <input asp-for="ReleaseId" type="hidden" />
+    <input asp-for="Step" type="hidden" />
+    <div asp-validation-summary="ModelOnly" class="alert alert-danger"></div>
+
+    <section class="panel @(Model.Step == 1 ? "" : "d-none")">
+        <h2 class="h5">General information</h2>
+        <div class="row g-3">
+            <div class="col-md-8">
+                <label asp-for="Title" class="form-label"></label>
+                <input asp-for="Title" class="form-control" />
+                <span asp-validation-for="Title" class="text-danger small"></span>
+            </div>
+            <div class="col-md-4">
+                <label asp-for="ReleaseVersion" class="form-label"></label>
+                <input asp-for="ReleaseVersion" class="form-control" />
+            </div>
+            <div class="col-12">
+                <label asp-for="Description" class="form-label"></label>
+                <textarea asp-for="Description" class="form-control" rows="4"></textarea>
+                <span asp-validation-for="Description" class="text-danger small"></span>
+            </div>
+            <div class="col-md-6">
+                <label asp-for="ProductId" class="form-label"></label>
+                <select asp-for="ProductId" class="form-select" asp-items="@(new SelectList(Model.Products, "Id", "Name"))">
+                    <option value="">Select a product</option>
+                </select>
+            </div>
+            <div class="col-md-6">
+                <label asp-for="EnvironmentId" class="form-label"></label>
+                <select asp-for="EnvironmentId" class="form-select" asp-items="@(new SelectList(Model.Environments, "Id", "Name"))">
+                    <option value="">Select an environment</option>
+                </select>
+            </div>
+            <div class="col-md-4">
+                <label asp-for="PlannedReleaseDate" class="form-label"></label>
+                <input asp-for="PlannedReleaseDate" class="form-control" />
+            </div>
+            <div class="col-md-4">
+                <label asp-for="ReleaseType" class="form-label"></label>
+                <select asp-for="ReleaseType" class="form-select" asp-items="Html.GetEnumSelectList<ReleaseType>()"></select>
+            </div>
+            <div class="col-md-4">
+                <label asp-for="Priority" class="form-label"></label>
+                <select asp-for="Priority" class="form-select" asp-items="Html.GetEnumSelectList<ReleasePriority>()"></select>
+            </div>
+        </div>
+    </section>
+
+    <section class="panel @(Model.Step == 2 ? "" : "d-none")">
+        <div class="d-flex justify-content-between align-items-center mb-3">
+            <div>
+                <h2 class="h5 mb-1">Services</h2>
+                <p class="text-muted mb-0">Select the services and identify the artifacts included in this release.</p>
+            </div>
+            <button type="button" class="btn btn-outline-secondary" id="add-service-row">Add service</button>
+        </div>
+        <div id="services-grid" class="services-grid">
+            @for (var i = 0; i < Model.Services.Count; i++)
+            {
+                <div class="service-row panel panel-nested" data-service-row>
+                    <div class="d-flex justify-content-between align-items-center mb-2">
+                        <strong class="service-row-title">Service @(i + 1)</strong>
+                        <button type="button" class="btn btn-sm btn-outline-danger" data-remove-service>Remove</button>
+                    </div>
+                    <div class="row g-2">
+                        <div class="col-md-4">
+                            <label class="form-label">Service</label>
+                            <select name="Services[@i].ServiceId" class="form-select" asp-items="@(new SelectList(Model.AvailableServices, "Id", "Name", Model.Services[i].ServiceId))">
+                                <option value="">Select service</option>
+                            </select>
+                        </div>
+                        <div class="col-md-2">
+                            <label class="form-label">Branch</label>
+                            <input name="Services[@i].BranchName" value="@Model.Services[i].BranchName" class="form-control" />
+                        </div>
+                        <div class="col-md-2">
+                            <label class="form-label">Commit</label>
+                            <input name="Services[@i].CommitId" value="@Model.Services[i].CommitId" class="form-control" />
+                        </div>
+                        <div class="col-md-2">
+                            <label class="form-label">Version</label>
+                            <input name="Services[@i].Version" value="@Model.Services[i].Version" class="form-control" />
+                        </div>
+                        <div class="col-md-2">
+                            <label class="form-label">Build</label>
+                            <input name="Services[@i].BuildNumber" value="@Model.Services[i].BuildNumber" class="form-control" />
+                        </div>
+                        <div class="col-md-6">
+                            <label class="form-label">Repository URL</label>
+                            <input name="Services[@i].RepositoryUrl" value="@Model.Services[i].RepositoryUrl" class="form-control" />
+                        </div>
+                        <div class="col-md-6">
+                            <label class="form-label">Notes</label>
+                            <input name="Services[@i].Notes" value="@Model.Services[i].Notes" class="form-control" />
+                        </div>
+                        <div class="col-md-6">
+                            <div class="form-check mt-2">
+                                <input type="checkbox" name="Services[@i].DatabaseChanges" value="true" class="form-check-input" id="Services_@(i)__DatabaseChanges" @(Model.Services[i].DatabaseChanges ? "checked" : null) />
+                                <label class="form-check-label" for="Services_@(i)__DatabaseChanges">Database changes</label>
+                            </div>
+                        </div>
+                        <div class="col-md-6">
+                            <div class="form-check mt-2">
+                                <input type="checkbox" name="Services[@i].ConfigurationChanges" value="true" class="form-check-input" id="Services_@(i)__ConfigurationChanges" @(Model.Services[i].ConfigurationChanges ? "checked" : null) />
+                                <label class="form-check-label" for="Services_@(i)__ConfigurationChanges">Configuration changes</label>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            }
+        </div>
+    </section>
+
+    <section class="panel @(Model.Step == 3 ? "" : "d-none")">
+        <h2 class="h5">Testing</h2>
+        <label asp-for="TestingSummary" class="form-label"></label>
+        <textarea asp-for="TestingSummary" class="form-control" rows="8" placeholder="Summarize test scope, results, and supporting evidence."></textarea>
+    </section>
+
+    <section class="panel @(Model.Step == 4 ? "" : "d-none")">
+        <h2 class="h5">Risk, deployment, and rollback</h2>
+        <div class="row g-3">
+            <div class="col-md-4">
+                <label asp-for="RiskLevel" class="form-label"></label>
+                <select asp-for="RiskLevel" class="form-select" asp-items="Html.GetEnumSelectList<RiskLevel>()"></select>
+            </div>
+            <div class="col-md-8">
+                <label asp-for="RiskDescription" class="form-label"></label>
+                <textarea asp-for="RiskDescription" class="form-control" rows="2"></textarea>
+            </div>
+            <div class="col-md-6"><label asp-for="DeploymentPlan" class="form-label"></label><textarea asp-for="DeploymentPlan" class="form-control" rows="4"></textarea></div>
+            <div class="col-md-6"><label asp-for="RollbackPlan" class="form-label"></label><textarea asp-for="RollbackPlan" class="form-control" rows="4"></textarea></div>
+            <div class="col-md-6"><label asp-for="MonitoringPlan" class="form-label"></label><textarea asp-for="MonitoringPlan" class="form-control" rows="3"></textarea></div>
+            <div class="col-md-6"><label asp-for="PostReleaseValidationPlan" class="form-label"></label><textarea asp-for="PostReleaseValidationPlan" class="form-control" rows="3"></textarea></div>
+            <div class="col-md-4">
+                <div class="form-check mt-4"><input asp-for="DowntimeRequired" class="form-check-input" /><label asp-for="DowntimeRequired" class="form-check-label"></label></div>
+            </div>
+            <div class="col-md-4"><label asp-for="ExpectedDowntimeMinutes" class="form-label"></label><input asp-for="ExpectedDowntimeMinutes" class="form-control" min="0" /></div>
+        </div>
+    </section>
+
+    <section class="panel @(Model.Step == 5 ? "" : "d-none")">
+        <h2 class="h5">Review</h2>
+        <dl class="status-summary">
+            <div><dt>Title</dt><dd>@Model.Title</dd></div>
+            <div><dt>Version</dt><dd>@(Model.ReleaseVersion ?? "—")</dd></div>
+            <div><dt>Planned date</dt><dd>@Model.PlannedReleaseDate.ToString("d")</dd></div>
+            <div><dt>Type / priority</dt><dd>@Model.ReleaseType / @Model.Priority</dd></div>
+            <div><dt>Risk</dt><dd>@Model.RiskLevel</dd></div>
+            <div><dt>Services</dt><dd>@Model.Services.Count(service => service.ServiceId != Guid.Empty)</dd></div>
+        </dl>
+        <hr />
+        <h3 class="h6">Description</h3>
+        <p class="mb-0" style="white-space: pre-wrap">@Model.Description</p>
+    </section>
+
+    <div class="d-flex gap-2 justify-content-between">
+        <button type="submit" name="action" value="save" class="btn btn-outline-secondary">Save Draft</button>
+        <div class="d-flex gap-2">
+            @if (Model.Step > 1)
+            {
+                <button type="submit" name="action" value="previous" class="btn btn-outline-secondary">Previous</button>
+            }
+            @if (Model.Step < 5)
+            {
+                <button type="submit" name="action" value="next" class="btn btn-accent">Next</button>
+            }
+            else
+            {
+                <button type="submit" name="action" value="submit" class="btn btn-accent">Submit release</button>
+            }
+        </div>
+    </div>
+</form>
+
+<template id="service-row-template">
+    <div class="service-row panel panel-nested" data-service-row>
+        <div class="d-flex justify-content-between align-items-center mb-2">
+            <strong class="service-row-title">Service</strong>
+            <button type="button" class="btn btn-sm btn-outline-danger" data-remove-service>Remove</button>
+        </div>
+        <div class="row g-2">
+            <div class="col-md-4">
+                <label class="form-label">Service</label>
+                <select name="Services[__index__].ServiceId" class="form-select" data-service-select>
+                    <option value="">Select service</option>
+                </select>
+            </div>
+            <div class="col-md-2">
+                <label class="form-label">Branch</label>
+                <input name="Services[__index__].BranchName" class="form-control" />
+            </div>
+            <div class="col-md-2">
+                <label class="form-label">Commit</label>
+                <input name="Services[__index__].CommitId" class="form-control" />
+            </div>
+            <div class="col-md-2">
+                <label class="form-label">Version</label>
+                <input name="Services[__index__].Version" class="form-control" />
+            </div>
+            <div class="col-md-2">
+                <label class="form-label">Build</label>
+                <input name="Services[__index__].BuildNumber" class="form-control" />
+            </div>
+            <div class="col-md-6">
+                <label class="form-label">Repository URL</label>
+                <input name="Services[__index__].RepositoryUrl" class="form-control" />
+            </div>
+            <div class="col-md-6">
+                <label class="form-label">Notes</label>
+                <input name="Services[__index__].Notes" class="form-control" />
+            </div>
+            <div class="col-md-6">
+                <div class="form-check mt-2">
+                    <input type="checkbox" name="Services[__index__].DatabaseChanges" value="true" class="form-check-input" data-db-check />
+                    <label class="form-check-label" data-db-label>Database changes</label>
+                </div>
+            </div>
+            <div class="col-md-6">
+                <div class="form-check mt-2">
+                    <input type="checkbox" name="Services[__index__].ConfigurationChanges" value="true" class="form-check-input" data-cfg-check />
+                    <label class="form-check-label" data-cfg-label>Configuration changes</label>
+                </div>
+            </div>
+        </div>
+    </div>
+</template>

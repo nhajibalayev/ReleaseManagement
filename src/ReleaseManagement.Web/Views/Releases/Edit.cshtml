@@ -1,0 +1,15 @@
+@model ReleaseWizardViewModel
+@{
+    ViewData["Title"] = "Edit Release";
+    ViewData["FormAction"] = "Edit";
+}
+
+<div class="mb-3">
+    <h1 class="h3 mb-1">Edit release</h1>
+    <p class="text-muted mb-0">Update the release draft, then save or submit it for review.</p>
+</div>
+<partial name="_WizardForm" model="Model" view-data="ViewData" />
+
+@section Scripts {
+    <partial name="_ValidationScriptsPartial" />
+}
