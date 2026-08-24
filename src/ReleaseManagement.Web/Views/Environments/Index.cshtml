@@ -1,0 +1,29 @@
+@model IEnumerable<ReleaseManagement.Domain.Entities.DeploymentEnvironment>
+@{
+    ViewData["Title"] = "Environments";
+}
+
+<div class="mb-3">
+    <h1 class="h3 mb-1">Environments</h1>
+    <p class="text-muted mb-0">Deployment targets configured for release scheduling.</p>
+</div>
+<section class="panel">
+    <div class="table-responsive">
+        <table class="table align-middle mb-0">
+            <thead><tr><th>Name</th><th>Code</th><th>Description</th><th>Type</th><th>Status</th></tr></thead>
+            <tbody>
+            @foreach (var environment in Model)
+            {
+                <tr>
+                    <td class="fw-semibold">@environment.Name</td>
+                    <td><code>@environment.Code</code></td>
+                    <td>@(environment.Description ?? "—")</td>
+                    <td>@(environment.IsProduction ? "Production" : "Non-production")</td>
+                    <td><span class="status-badge @(environment.IsActive ? "ok" : "danger")">@(environment.IsActive ? "Active" : "Inactive")</span></td>
+                </tr>
+            }
+            @if (!Model.Any()) { <tr><td colspan="5" class="text-center text-muted py-4">No environments configured.</td></tr> }
+            </tbody>
+        </table>
+    </div>
+</section>

@@ -1,0 +1,43 @@
+@model LoginViewModel
+@inject IConfiguration Configuration
+@{
+    ViewData["Title"] = "Sign in";
+    Layout = "_Layout";
+}
+
+<div class="login-shell">
+    <div class="login-card">
+        <h1>Release Management</h1>
+        <p>Sign in to manage release requests and approvals.</p>
+        @if (Configuration.GetValue<bool>("DemoMode"))
+        {
+            <div class="alert alert-info small">
+                <strong>Demo mode:</strong> data is kept in memory and resets on restart.<br />
+                Login: <code>po</code> / <code>ChangeMe!123</code>
+            </div>
+        }
+        <form asp-controller="Account" asp-action="Login" method="post">
+            <div asp-validation-summary="ModelOnly" class="alert alert-danger" role="alert"></div>
+            <input asp-for="ReturnUrl" type="hidden" />
+            <div class="mb-3">
+                <label asp-for="UserName" class="form-label"></label>
+                <input asp-for="UserName" class="form-control" autocomplete="username" autofocus />
+                <span asp-validation-for="UserName" class="text-danger small"></span>
+            </div>
+            <div class="mb-3">
+                <label asp-for="Password" class="form-label"></label>
+                <input asp-for="Password" class="form-control" autocomplete="current-password" />
+                <span asp-validation-for="Password" class="text-danger small"></span>
+            </div>
+            <div class="form-check mb-3">
+                <input asp-for="RememberMe" class="form-check-input" />
+                <label asp-for="RememberMe" class="form-check-label"></label>
+            </div>
+            <button type="submit" class="btn btn-accent w-100">Sign in</button>
+        </form>
+    </div>
+</div>
+
+@section Scripts {
+    <partial name="_ValidationScriptsPartial" />
+}

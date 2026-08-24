@@ -1,0 +1,31 @@
+@model PendingApprovalsPageViewModel
+@{
+    ViewData["Title"] = "Pending Approvals";
+}
+
+<div class="mb-3">
+    <h1 class="h3 mb-1">Pending Approvals</h1>
+    <p class="text-muted mb-0">Release reviews currently assigned to you.</p>
+</div>
+<section class="panel">
+    <div class="table-responsive">
+        <table class="table table-hover align-middle mb-0">
+            <thead><tr><th>Release</th><th>Product</th><th>Approval</th><th>Requested</th><th>Planned date</th><th>SLA due</th><th></th></tr></thead>
+            <tbody>
+            @foreach (var item in Model.Items)
+            {
+                <tr>
+                    <td><strong>@item.ReleaseNumber</strong><div class="small text-muted">@item.Title</div></td>
+                    <td>@(item.ProductName ?? "—")</td>
+                    <td><span class="status-badge action">@item.ApprovalType</span></td>
+                    <td>@item.RequestedDate.ToLocalTime().ToString("g")</td>
+                    <td>@item.PlannedReleaseDate.ToLocalTime().ToString("g")</td>
+                    <td>@(item.SlaDueDate?.ToLocalTime().ToString("g") ?? "—")</td>
+                    <td class="text-end"><a asp-controller="Releases" asp-action="Details" asp-route-id="@item.ReleaseId" class="btn btn-sm btn-accent">Review</a></td>
+                </tr>
+            }
+            @if (!Model.Items.Any()) { <tr><td colspan="7" class="text-center text-muted py-4">No pending approvals.</td></tr> }
+            </tbody>
+        </table>
+    </div>
+</section>

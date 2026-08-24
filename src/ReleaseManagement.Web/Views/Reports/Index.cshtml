@@ -1,0 +1,49 @@
+@{
+    ViewData["Title"] = "Reports";
+    IEnumerable<dynamic> byStatus = ViewBag.ByStatus;
+    IEnumerable<dynamic> byRisk = ViewBag.ByRisk;
+    var failed = (int)ViewBag.Failed;
+    var deployed = (int)ViewBag.Deployed;
+    var deploymentTotal = failed + deployed;
+    var successRate = deploymentTotal == 0 ? 0 : deployed * 100d / deploymentTotal;
+}
+
+<div class="mb-3">
+    <h1 class="h3 mb-1">Reports</h1>
+    <p class="text-muted mb-0">Current release and deployment metrics.</p>
+</div>
+<div class="stat-grid mb-4">
+    <div class="stat-card"><div class="label">Deployed / closed</div><div class="value">@deployed</div></div>
+    <div class="stat-card"><div class="label">Failed / rolled back</div><div class="value">@failed</div></div>
+    <div class="stat-card"><div class="label">Deployment success rate</div><div class="value">@successRate.ToString("N1")%</div></div>
+</div>
+<div class="row g-4">
+    <div class="col-lg-7">
+        <section class="panel h-100">
+            <h2 class="h5">Releases by status</h2>
+            <table class="table mb-0">
+                <thead><tr><th>Status</th><th class="text-end">Count</th></tr></thead>
+                <tbody>
+                @foreach (dynamic item in byStatus)
+                {
+                    <tr><td><span class="status-badge">@ReleaseStatusDisplay.Format((ReleaseStatus)item.Status)</span></td><td class="text-end">@item.Count</td></tr>
+                }
+                </tbody>
+            </table>
+        </section>
+    </div>
+    <div class="col-lg-5">
+        <section class="panel h-100">
+            <h2 class="h5">Releases by risk</h2>
+            <table class="table mb-0">
+                <thead><tr><th>Risk</th><th class="text-end">Count</th></tr></thead>
+                <tbody>
+                @foreach (dynamic item in byRisk)
+                {
+                    <tr><td>@item.Risk</td><td class="text-end">@item.Count</td></tr>
+                }
+                </tbody>
+            </table>
+        </section>
+    </div>
+</div>

@@ -1,0 +1,29 @@
+@model IEnumerable<ReleaseManagement.Domain.Entities.Notification>
+@{
+    ViewData["Title"] = "Notifications";
+}
+
+<div class="mb-3">
+    <h1 class="h3 mb-1">Notifications</h1>
+    <p class="text-muted mb-0">Updates and actions related to your releases.</p>
+</div>
+<section class="panel">
+    @foreach (var notification in Model)
+    {
+        <article class="d-flex justify-content-between gap-3 border-bottom py-3 @(notification.IsRead ? "text-muted" : "")">
+            <div>
+                <h2 class="h6 mb-1">@notification.Title @if (!notification.IsRead) { <span class="badge text-bg-primary">New</span> }</h2>
+                <p class="mb-1">@notification.Message</p>
+                <small>@notification.CreatedDate.ToLocalTime().ToString("g")</small>
+            </div>
+            @if (!notification.IsRead)
+            {
+                <form asp-action="MarkRead" method="post">
+                    <input type="hidden" name="id" value="@notification.Id" />
+                    <button type="submit" class="btn btn-sm btn-outline-secondary">Mark read</button>
+                </form>
+            }
+        </article>
+    }
+    @if (!Model.Any()) { <p class="text-center text-muted mb-0 py-4">No notifications.</p> }
+</section>

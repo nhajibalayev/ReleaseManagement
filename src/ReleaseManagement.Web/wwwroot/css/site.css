@@ -1,0 +1,346 @@
+:root {
+  --rm-ink: #15202b;
+  --rm-muted: #5b6b79;
+  --rm-panel: #f4f7f8;
+  --rm-line: #d7e0e6;
+  --rm-accent: #0f6b6b;
+  --rm-accent-strong: #0a4f4f;
+  --rm-warn: #9a5b00;
+  --rm-danger: #9b1c1c;
+  --rm-ok: #1f6b3a;
+  --rm-sidebar: #10232b;
+  --rm-sidebar-text: #d7e8ea;
+  --rm-sidebar-active: #1b3d45;
+  --rm-topbar: #ffffff;
+  --rm-shadow: 0 10px 30px rgba(16, 35, 43, 0.08);
+  --rm-radius: 14px;
+  --rm-font: "Segoe UI", "Helvetica Neue", sans-serif;
+}
+
+html, body {
+  height: 100%;
+}
+
+body {
+  margin: 0;
+  font-family: var(--rm-font);
+  color: var(--rm-ink);
+  background:
+    radial-gradient(circle at top left, rgba(15, 107, 107, 0.08), transparent 28%),
+    linear-gradient(180deg, #eef3f5 0%, #f7fafb 40%, #eef3f5 100%);
+}
+
+a { color: var(--rm-accent); }
+
+.app-shell {
+  min-height: 100vh;
+  display: grid;
+  grid-template-columns: 260px 1fr;
+}
+
+.sidebar {
+  background: linear-gradient(180deg, #0d1d24 0%, var(--rm-sidebar) 100%);
+  color: var(--rm-sidebar-text);
+  padding: 1.25rem 1rem;
+  position: sticky;
+  top: 0;
+  height: 100vh;
+}
+
+.brand {
+  display: block;
+  padding: 0.75rem 0.85rem 1.25rem;
+  color: #fff;
+  text-decoration: none;
+  font-size: 1.15rem;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+}
+
+.brand span {
+  display: block;
+  margin-top: 0.2rem;
+  font-size: 0.75rem;
+  font-weight: 500;
+  color: #93b4bb;
+}
+
+.nav-section {
+  margin-top: 0.75rem;
+}
+
+.nav-section-title {
+  padding: 0.5rem 0.85rem;
+  font-size: 0.72rem;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: #7f9ea5;
+}
+
+.side-link {
+  display: block;
+  padding: 0.7rem 0.85rem;
+  border-radius: 10px;
+  color: var(--rm-sidebar-text);
+  text-decoration: none;
+  margin-bottom: 0.25rem;
+}
+
+.side-link:hover,
+.side-link.active {
+  background: var(--rm-sidebar-active);
+  color: #fff;
+}
+
+.main-column {
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+}
+
+.topbar {
+  background: rgba(255, 255, 255, 0.92);
+  backdrop-filter: blur(8px);
+  border-bottom: 1px solid var(--rm-line);
+  padding: 0.85rem 1.5rem;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  position: sticky;
+  top: 0;
+  z-index: 20;
+}
+
+.topbar-title {
+  font-weight: 700;
+  font-size: 1.05rem;
+}
+
+.topbar-actions {
+  display: flex;
+  gap: 0.75rem;
+  align-items: center;
+}
+
+.content {
+  padding: 1.5rem;
+}
+
+.panel {
+  background: rgba(255, 255, 255, 0.92);
+  border: 1px solid var(--rm-line);
+  border-radius: var(--rm-radius);
+  box-shadow: var(--rm-shadow);
+  padding: 1.25rem;
+  margin-bottom: 1rem;
+}
+
+.panel h1,
+.panel h2,
+.panel h3 {
+  margin-bottom: 0.75rem;
+}
+
+.stat-grid {
+  display: grid;
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+  gap: 1rem;
+}
+
+.stat-card {
+  background: linear-gradient(180deg, #ffffff, #f3f8f8);
+  border: 1px solid var(--rm-line);
+  border-radius: var(--rm-radius);
+  padding: 1rem;
+}
+
+.stat-card .label {
+  color: var(--rm-muted);
+  font-size: 0.85rem;
+}
+
+.stat-card .value {
+  font-size: 1.8rem;
+  font-weight: 700;
+  margin-top: 0.35rem;
+  color: var(--rm-accent-strong);
+}
+
+.status-badge {
+  display: inline-flex;
+  align-items: center;
+  padding: 0.25rem 0.6rem;
+  border-radius: 999px;
+  font-size: 0.78rem;
+  font-weight: 600;
+  background: #e7f1f1;
+  color: var(--rm-accent-strong);
+}
+
+.status-badge.action {
+  background: #fff1d6;
+  color: var(--rm-warn);
+}
+
+.status-badge.danger {
+  background: #fde8e8;
+  color: var(--rm-danger);
+}
+
+.status-badge.ok {
+  background: #e5f6ea;
+  color: var(--rm-ok);
+}
+
+.action-banner {
+  border-left: 4px solid var(--rm-warn);
+  background: #fff8ea;
+  padding: 1rem 1.1rem;
+  border-radius: 10px;
+  margin-bottom: 1rem;
+}
+
+.status-summary {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 0.75rem 1.25rem;
+}
+
+.status-summary dt {
+  color: var(--rm-muted);
+  font-size: 0.85rem;
+}
+
+.status-summary dd {
+  margin: 0;
+  font-weight: 600;
+}
+
+.timeline {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+}
+
+.timeline li {
+  position: relative;
+  padding: 0 0 1rem 1.25rem;
+  border-left: 2px solid var(--rm-line);
+}
+
+.timeline li::before {
+  content: "";
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  background: var(--rm-accent);
+  position: absolute;
+  left: -6px;
+  top: 0.35rem;
+}
+
+.table thead th {
+  color: var(--rm-muted);
+  font-weight: 600;
+  font-size: 0.85rem;
+}
+
+.wizard-steps {
+  display: flex;
+  gap: 0.5rem;
+  margin-bottom: 1rem;
+  flex-wrap: wrap;
+}
+
+.wizard-step {
+  padding: 0.45rem 0.8rem;
+  border-radius: 999px;
+  background: #e8efef;
+  color: var(--rm-muted);
+  font-size: 0.85rem;
+}
+
+.wizard-step.active {
+  background: var(--rm-accent);
+  color: #fff;
+}
+
+.services-grid {
+  display: grid;
+  gap: 0.85rem;
+}
+
+.panel-nested {
+  margin: 0;
+  padding: 1rem;
+  background: #fbfcfd;
+}
+
+.btn-accent {
+  background: var(--rm-accent);
+  border-color: var(--rm-accent);
+  color: #fff;
+}
+
+.btn-accent:hover {
+  background: var(--rm-accent-strong);
+  border-color: var(--rm-accent-strong);
+  color: #fff;
+}
+
+.login-shell {
+  min-height: 100vh;
+  display: grid;
+  place-items: center;
+  padding: 1rem;
+  background:
+    radial-gradient(circle at 20% 20%, rgba(15, 107, 107, 0.18), transparent 30%),
+    linear-gradient(135deg, #0f232b, #18454c 45%, #f4f7f8 45%);
+}
+
+.login-card {
+  width: min(420px, 100%);
+  background: #fff;
+  border-radius: 18px;
+  padding: 2rem;
+  box-shadow: var(--rm-shadow);
+}
+
+.login-card h1 {
+  font-size: 1.6rem;
+  margin-bottom: 0.35rem;
+}
+
+.login-card p {
+  color: var(--rm-muted);
+}
+
+.notification-dropdown {
+  min-width: 320px;
+}
+
+@media (max-width: 1100px) {
+  .stat-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .app-shell {
+    grid-template-columns: 1fr;
+  }
+
+  .sidebar {
+    height: auto;
+    position: relative;
+  }
+}
+
+@media (max-width: 768px) {
+  .status-summary,
+  .stat-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .content {
+    padding: 1rem;
+  }
+}

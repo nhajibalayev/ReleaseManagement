@@ -1,0 +1,28 @@
+﻿@model DashboardViewModel
+@{
+    ViewData["Title"] = "Dashboard";
+}
+
+<div class="d-flex justify-content-between align-items-center mb-3">
+    <div>
+        <h1 class="h3 mb-1">Dashboard</h1>
+        <p class="text-muted mb-0">Release activity requiring your attention.</p>
+    </div>
+    <a asp-controller="Releases" asp-action="Create" class="btn btn-accent">New release</a>
+</div>
+
+<div class="stat-grid mb-4">
+    <div class="stat-card"><div class="label">My open releases</div><div class="value">@Model.MyOpenReleases</div></div>
+    <div class="stat-card"><div class="label">Action required</div><div class="value">@Model.ActionRequired</div></div>
+    <div class="stat-card"><div class="label">Pending approvals</div><div class="value">@Model.PendingApprovals</div></div>
+    <div class="stat-card"><div class="label">Ready for release</div><div class="value">@Model.ReadyForRelease</div></div>
+    <div class="stat-card"><div class="label">Deployed this month</div><div class="value">@Model.DeployedThisMonth</div></div>
+</div>
+
+<section class="panel">
+    <div class="d-flex justify-content-between align-items-center mb-3">
+        <h2 class="h5 mb-0">Recent releases</h2>
+        <a asp-controller="Releases" asp-action="My">View all</a>
+    </div>
+    <partial name="Partials/_ReleaseListTable" model="Model.RecentReleases" />
+</section>

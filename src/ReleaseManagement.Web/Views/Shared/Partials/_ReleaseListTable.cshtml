@@ -1,0 +1,46 @@
+@model IEnumerable<ReleaseListItemViewModel>
+
+<div class="table-responsive">
+    <table class="table table-hover align-middle mb-0">
+        <thead>
+        <tr>
+            <th>Release</th>
+            <th>Product</th>
+            <th>Version</th>
+            <th>Planned date</th>
+            <th>Status</th>
+            <th>Responsible</th>
+            <th></th>
+        </tr>
+        </thead>
+        <tbody>
+        @foreach (var release in Model)
+        {
+            <tr>
+                <td>
+                    <a asp-controller="Releases" asp-action="Details" asp-route-id="@release.Id" class="fw-semibold text-decoration-none">
+                        @release.ReleaseNumber
+                    </a>
+                    <div class="small text-muted">@release.Title</div>
+                </td>
+                <td>@(release.ProductName ?? "—")</td>
+                <td>@(string.IsNullOrWhiteSpace(release.ReleaseVersion) ? "—" : release.ReleaseVersion)</td>
+                <td>@release.PlannedReleaseDate.ToLocalTime().ToString("g")</td>
+                <td>
+                    <span class="status-badge @(release.ActionRequiredFromCurrentUser ? "action" : "")">
+                        @release.CurrentStatusDisplay
+                    </span>
+                </td>
+                <td>@(release.CurrentResponsibleDisplay ?? "Unassigned")</td>
+                <td class="text-end">
+                    <a asp-controller="Releases" asp-action="Details" asp-route-id="@release.Id" class="btn btn-sm btn-outline-secondary">View</a>
+                </td>
+            </tr>
+        }
+        @if (!Model.Any())
+        {
+            <tr><td colspan="7" class="text-center text-muted py-4">No releases found.</td></tr>
+        }
+        </tbody>
+    </table>
+</div>

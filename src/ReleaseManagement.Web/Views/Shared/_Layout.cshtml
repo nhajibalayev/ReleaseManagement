@@ -1,0 +1,91 @@
+﻿@using ReleaseManagement.Application.Abstractions
+@inject ICurrentUserService CurrentUser
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>@ViewData["Title"] - Release Management Platform</title>
+    <link rel="stylesheet" href="~/lib/bootstrap/dist/css/bootstrap.min.css" />
+    <link rel="stylesheet" href="~/css/site.css" asp-append-version="true" />
+</head>
+<body>
+@if (User.Identity?.IsAuthenticated == true)
+{
+    <div class="app-shell">
+        <aside class="sidebar">
+            <a class="brand" asp-controller="Home" asp-action="Index">
+                Release Management
+                <span>Lifecycle control platform</span>
+            </a>
+            <div class="nav-section">
+                <div class="nav-section-title">Workspace</div>
+                <a class="side-link" asp-controller="Home" asp-action="Index">Dashboard</a>
+                <a class="side-link" asp-controller="Releases" asp-action="My">My Release Requests</a>
+                <a class="side-link" asp-controller="Approvals" asp-action="Index">Pending Approvals</a>
+                <a class="side-link" asp-controller="Deployments" asp-action="Calendar">Deployment Calendar</a>
+                <a class="side-link" asp-controller="Reports" asp-action="Index">Reports</a>
+                <a class="side-link" asp-controller="Notifications" asp-action="Index">Notifications</a>
+            </div>
+            @if (CurrentUser.IsInRole("ReleaseManager") || CurrentUser.IsInRole("Administrator") || CurrentUser.IsInRole("Auditor"))
+            {
+                <div class="nav-section">
+                    <div class="nav-section-title">Operations</div>
+                    <a class="side-link" asp-controller="Releases" asp-action="Index">All Releases</a>
+                </div>
+            }
+            @if (CurrentUser.IsInRole("Administrator"))
+            {
+                <div class="nav-section">
+                    <div class="nav-section-title">Administration</div>
+                    <a class="side-link" asp-controller="Products" asp-action="Index">Products</a>
+                    <a class="side-link" asp-controller="Environments" asp-action="Index">Environments</a>
+                    <a class="side-link" asp-controller="Users" asp-action="Index">Users</a>
+                </div>
+            }
+        </aside>
+        <div class="main-column">
+            <header class="topbar">
+                <div class="topbar-title">@(ViewData["Title"] ?? "Workspace")</div>
+                <div class="topbar-actions">
+                    <div class="dropdown">
+                        <button class="btn btn-outline-secondary btn-sm dropdown-toggle" type="button" data-bs-toggle="dropdown" id="notification-bell">
+                            Notifications <span id="notification-count" class="badge text-bg-danger" style="display:none;"></span>
+                        </button>
+                        <div class="dropdown-menu dropdown-menu-end notification-dropdown p-2">
+                            <div id="notification-list"></div>
+                            <div class="dropdown-divider"></div>
+                            <a class="dropdown-item" asp-controller="Notifications" asp-action="Index">View all</a>
+                        </div>
+                    </div>
+                    <span class="small text-muted">@CurrentUser.UserName</span>
+                    <form asp-controller="Account" asp-action="Logout" method="post" class="d-inline">
+                        @Html.AntiForgeryToken()
+                        <button type="submit" class="btn btn-sm btn-outline-dark">Sign out</button>
+                    </form>
+                </div>
+            </header>
+            <main class="content">
+                @if (TempData["Success"] is string success)
+                {
+                    <div class="alert alert-success">@success</div>
+                }
+                @if (TempData["Error"] is string error)
+                {
+                    <div class="alert alert-danger">@error</div>
+                }
+                @RenderBody()
+            </main>
+        </div>
+    </div>
+}
+else
+{
+    @RenderBody()
+}
+<script src="~/lib/jquery/dist/jquery.min.js"></script>
+<script src="~/lib/bootstrap/dist/js/bootstrap.bundle.min.js"></script>
+<script src="~/js/site.js" asp-append-version="true"></script>
+@await RenderSectionAsync("Scripts", required: false)
+</body>
+</html>

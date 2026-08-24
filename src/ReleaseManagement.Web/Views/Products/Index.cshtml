@@ -1,0 +1,35 @@
+@model IEnumerable<ReleaseManagement.Domain.Entities.Product>
+@{
+    ViewData["Title"] = "Products";
+}
+
+<div class="row g-4">
+    <div class="col-lg-8">
+        <section class="panel">
+            <h1 class="h4">Products</h1>
+            <div class="table-responsive">
+                <table class="table align-middle mb-0">
+                    <thead><tr><th>Name</th><th>Code</th><th>Description</th><th>Status</th></tr></thead>
+                    <tbody>
+                    @foreach (var product in Model)
+                    {
+                        <tr><td class="fw-semibold">@product.Name</td><td><code>@product.Code</code></td><td>@(product.Description ?? "—")</td><td><span class="status-badge @(product.IsActive ? "ok" : "danger")">@(product.IsActive ? "Active" : "Inactive")</span></td></tr>
+                    }
+                    @if (!Model.Any()) { <tr><td colspan="4" class="text-center text-muted py-4">No products configured.</td></tr> }
+                    </tbody>
+                </table>
+            </div>
+        </section>
+    </div>
+    <div class="col-lg-4">
+        <section class="panel">
+            <h2 class="h5">Create product</h2>
+            <form asp-action="Create" method="post">
+                <div class="mb-3"><label for="name" class="form-label">Name</label><input id="name" name="name" class="form-control" required maxlength="200" /></div>
+                <div class="mb-3"><label for="code" class="form-label">Code</label><input id="code" name="code" class="form-control" required maxlength="50" /></div>
+                <div class="mb-3"><label for="description" class="form-label">Description</label><textarea id="description" name="description" class="form-control" rows="3"></textarea></div>
+                <button type="submit" class="btn btn-accent">Create product</button>
+            </form>
+        </section>
+    </div>
+</div>

@@ -1,0 +1,35 @@
+@model IEnumerable<dynamic>
+@{
+    ViewData["Title"] = "Deployment Calendar";
+    var products = ViewBag.Products as Dictionary<Guid, string> ?? new();
+    var environments = ViewBag.Environments as Dictionary<Guid, string> ?? new();
+}
+
+<div class="mb-3">
+    <h1 class="h3 mb-1">Deployment Calendar</h1>
+    <p class="text-muted mb-0">Scheduled releases are shown in chronological order. Dates are displayed in local time.</p>
+</div>
+<section class="panel">
+    <div class="table-responsive">
+        <table class="table table-hover align-middle mb-0">
+            <thead><tr><th>Planned date</th><th>Release</th><th>Product</th><th>Environment</th><th>Status</th><th></th></tr></thead>
+            <tbody>
+            @foreach (dynamic release in Model)
+            {
+                var productId = (Guid)release.ProductId;
+                var environmentId = (Guid)release.EnvironmentId;
+                var status = (ReleaseStatus)release.CurrentStatus;
+                <tr>
+                    <td>@((DateTime)release.PlannedReleaseDate).ToLocalTime().ToString("g")</td>
+                    <td><strong>@release.ReleaseNumber</strong><div class="small text-muted">@release.Title</div></td>
+                    <td>@products.GetValueOrDefault(productId, "—")</td>
+                    <td>@environments.GetValueOrDefault(environmentId, "—")</td>
+                    <td><span class="status-badge">@ReleaseStatusDisplay.Format(status)</span></td>
+                    <td class="text-end"><a asp-controller="Releases" asp-action="Details" asp-route-id="@release.Id" class="btn btn-sm btn-outline-secondary">View</a></td>
+                </tr>
+            }
+            @if (!Model.Any()) { <tr><td colspan="6" class="text-center text-muted py-4">No scheduled releases.</td></tr> }
+            </tbody>
+        </table>
+    </div>
+</section>

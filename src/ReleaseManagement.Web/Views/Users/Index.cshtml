@@ -1,0 +1,29 @@
+@model IEnumerable<dynamic>
+@{
+    ViewData["Title"] = "Users";
+}
+
+<div class="mb-3">
+    <h1 class="h3 mb-1">Users</h1>
+    <p class="text-muted mb-0">Identity, role, and account status overview.</p>
+</div>
+<section class="panel">
+    <div class="table-responsive">
+        <table class="table align-middle mb-0">
+            <thead><tr><th>User name</th><th>Full name</th><th>Email</th><th>Roles</th><th>Status</th></tr></thead>
+            <tbody>
+            @foreach (dynamic user in Model)
+            {
+                <tr>
+                    <td class="fw-semibold">@user.UserName</td>
+                    <td>@user.FullName</td>
+                    <td><a href="mailto:@user.Email">@user.Email</a></td>
+                    <td>@(string.IsNullOrWhiteSpace((string?)user.Roles) ? "—" : user.Roles)</td>
+                    <td><span class="status-badge @((bool)user.IsActive ? "ok" : "danger")">@((bool)user.IsActive ? "Active" : "Inactive")</span></td>
+                </tr>
+            }
+            @if (!Model.Any()) { <tr><td colspan="5" class="text-center text-muted py-4">No users found.</td></tr> }
+            </tbody>
+        </table>
+    </div>
+</section>
