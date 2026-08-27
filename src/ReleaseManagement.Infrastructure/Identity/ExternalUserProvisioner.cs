@@ -16,6 +16,10 @@ public interface IExternalUserProvisioner
     Task<AppIdentityUser> ProvisionFromClaimsAsync(
         ClaimsPrincipal principal,
         CancellationToken cancellationToken = default);
+
+    Task<AppIdentityUser> ProvisionFromWindowsAsync(
+        ClaimsPrincipal principal,
+        CancellationToken cancellationToken = default);
 }
 
 public sealed class ExternalUserProvisioner : IExternalUserProvisioner
@@ -24,7 +28,8 @@ public sealed class ExternalUserProvisioner : IExternalUserProvisioner
     private readonly RoleManager<IdentityRole<Guid>> _roleManager;
     private readonly ApplicationDbContext _dbContext;
     private readonly IClock _clock;
-    private readonly AzureAdOptions _options;
+    private readonly AzureAdOptions _azureAd;
+    private readonly WindowsAuthOptions _windowsAuth;
     private readonly ILogger<ExternalUserProvisioner> _logger;
 
     public ExternalUserProvisioner(
@@ -32,18 +37,20 @@ public sealed class ExternalUserProvisioner : IExternalUserProvisioner
         RoleManager<IdentityRole<Guid>> roleManager,
         ApplicationDbContext dbContext,
         IClock clock,
-        IOptions<AzureAdOptions> options,
+        IOptions<AzureAdOptions> azureAd,
+        IOptions<WindowsAuthOptions> windowsAuth,
         ILogger<ExternalUserProvisioner> logger)
     {
         _userManager = userManager;
         _roleManager = roleManager;
         _dbContext = dbContext;
         _clock = clock;
-        _options = options.Value;
+        _azureAd = azureAd.Value;
+        _windowsAuth = windowsAuth.Value;
         _logger = logger;
     }
 
-    public async Task<AppIdentityUser> ProvisionFromClaimsAsync(
+    public Task<AppIdentityUser> ProvisionFromClaimsAsync(
         ClaimsPrincipal principal,
         CancellationToken cancellationToken = default)
     {
@@ -64,12 +71,57 @@ public sealed class ExternalUserProvisioner : IExternalUserProvisioner
             ? email[..email.IndexOf('@', StringComparison.Ordinal)]
             : email;
 
+        return UpsertExternalUserAsync(
+            externalId: objectId,
+            userName: userName,
+            email: email,
+            displayName: displayName,
+            defaultRole: _azureAd.DefaultRole,
+            cancellationToken);
+    }
+
+    public Task<AppIdentityUser> ProvisionFromWindowsAsync(
+        ClaimsPrincipal principal,
+        CancellationToken cancellationToken = default)
+    {
+        var identityName = principal.Identity?.Name
+            ?? throw new InvalidOperationException("Windows identity name is missing.");
+
+        var sid = principal.FindFirstValue(ClaimTypes.PrimarySid)
+            ?? principal.FindFirstValue(ClaimTypes.NameIdentifier)
+            ?? identityName;
+
+        var shortName = identityName.Contains('\\', StringComparison.Ordinal)
+            ? identityName[(identityName.LastIndexOf('\\') + 1)..]
+            : identityName;
+
+        var email = principal.FindFirstValue(ClaimTypes.Email)
+            ?? $"{shortName.Replace(' ', '.')}@ad.local";
+
+        return UpsertExternalUserAsync(
+            externalId: $"win:{sid}",
+            userName: shortName,
+            email: email,
+            displayName: identityName,
+            defaultRole: _windowsAuth.DefaultRole,
+            cancellationToken);
+    }
+
+    private async Task<AppIdentityUser> UpsertExternalUserAsync(
+        string externalId,
+        string userName,
+        string email,
+        string displayName,
+        string defaultRole,
+        CancellationToken cancellationToken)
+    {
         var existing = await _userManager.Users
-            .FirstOrDefaultAsync(user => user.ExternalId == objectId, cancellationToken);
+            .FirstOrDefaultAsync(user => user.ExternalId == externalId, cancellationToken);
 
         if (existing is null)
         {
-            existing = await _userManager.FindByEmailAsync(email);
+            existing = await _userManager.FindByNameAsync(userName)
+                ?? await _userManager.FindByEmailAsync(email);
         }
 
         var now = _clock.UtcNow;
@@ -82,7 +134,7 @@ public sealed class ExternalUserProvisioner : IExternalUserProvisioner
                 UserName = userName,
                 Email = email,
                 EmailConfirmed = true,
-                ExternalId = objectId,
+                ExternalId = externalId,
                 FullName = displayName,
                 IsActive = true,
                 CreatedDate = now,
@@ -96,29 +148,29 @@ public sealed class ExternalUserProvisioner : IExternalUserProvisioner
                     string.Join("; ", createResult.Errors.Select(error => error.Description)));
             }
 
-            var defaultRole = string.IsNullOrWhiteSpace(_options.DefaultRole)
+            var role = string.IsNullOrWhiteSpace(defaultRole)
                 ? RoleNames.ProductOwner
-                : _options.DefaultRole;
+                : defaultRole;
 
-            if (!await _roleManager.RoleExistsAsync(defaultRole))
+            if (!await _roleManager.RoleExistsAsync(role))
             {
-                await _roleManager.CreateAsync(new IdentityRole<Guid>(defaultRole));
+                await _roleManager.CreateAsync(new IdentityRole<Guid>(role));
             }
 
-            if (!await _userManager.IsInRoleAsync(existing, defaultRole))
+            if (!await _userManager.IsInRoleAsync(existing, role))
             {
-                await _userManager.AddToRoleAsync(existing, defaultRole);
+                await _userManager.AddToRoleAsync(existing, role);
             }
 
             _logger.LogInformation(
-                "Provisioned SSO user {UserName} ({ExternalId}) with role {Role}",
+                "Provisioned external user {UserName} ({ExternalId}) with role {Role}",
                 existing.UserName,
-                objectId,
-                defaultRole);
+                externalId,
+                role);
         }
         else
         {
-            existing.ExternalId ??= objectId;
+            existing.ExternalId ??= externalId;
             existing.FullName = displayName;
             existing.Email = email;
             existing.UpdatedDate = now;
@@ -136,13 +188,13 @@ public sealed class ExternalUserProvisioner : IExternalUserProvisioner
                 existing.FullName,
                 existing.Email!,
                 now);
-            applicationUser.SetExternalIdentity(objectId, now);
+            applicationUser.SetExternalIdentity(externalId, now);
             _dbContext.ApplicationUsers.Add(applicationUser);
             await _dbContext.SaveChangesAsync(cancellationToken);
         }
         else if (string.IsNullOrWhiteSpace(applicationUser.ExternalId))
         {
-            applicationUser.SetExternalIdentity(objectId, now);
+            applicationUser.SetExternalIdentity(externalId, now);
             await _dbContext.SaveChangesAsync(cancellationToken);
         }
 

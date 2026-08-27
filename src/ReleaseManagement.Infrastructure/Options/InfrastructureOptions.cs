@@ -1,5 +1,22 @@
 namespace ReleaseManagement.Infrastructure.Options;
 
+public sealed class WindowsAuthOptions
+{
+    public const string SectionName = "WindowsAuth";
+
+    /// <summary>
+    /// When true, Active Directory / Windows (Negotiate) login is offered.
+    /// Typical for on-prem Azure DevOps Server environments.
+    /// </summary>
+    public bool Enabled { get; set; }
+
+    /// <summary>Keep username/password login available alongside Windows auth.</summary>
+    public bool AllowLocalLogin { get; set; } = true;
+
+    /// <summary>Default app role for newly provisioned Windows/AD users.</summary>
+    public string DefaultRole { get; set; } = "ProductOwner";
+}
+
 public sealed class AzureAdOptions
 {
     public const string SectionName = "AzureAd";
@@ -30,25 +47,42 @@ public sealed class AzureDevOpsOptions
 {
     public const string SectionName = "AzureDevOps";
 
+    /// <summary>
+    /// Collection/organization base URL.
+    /// On-prem example: https://devops.nh-nk.az/DefaultCollection
+    /// Cloud example: https://dev.azure.com/contoso
+    /// </summary>
     public string OrganizationUrl { get; set; } = string.Empty;
 
     public string Project { get; set; } = string.Empty;
 
-    /// <summary>Optional fallback PAT when user OAuth token is unavailable (e.g. local/dev).</summary>
+    /// <summary>
+    /// PAT from Azure DevOps Server / Services.
+    /// Primary auth for on-prem API calls and Hangfire background jobs.
+    /// </summary>
     public string PersonalAccessToken { get; set; } = string.Empty;
 
-    public string WorkItemType { get; set; } = "Release";
+    public string WorkItemType { get; set; } = "Task";
 
     public bool Enabled { get; set; }
 
+    /// <summary>REST API version. Prefer 7.1; older servers may need 6.0 or 5.1.</summary>
+    public string ApiVersion { get; set; } = "7.1";
+
     /// <summary>
-    /// Azure DevOps resource GUID scope for delegated user tokens.
+    /// When true, HttpClient sends Windows credentials (useful with Negotiate/IIS impersonation).
+    /// </summary>
+    public bool UseWindowsCredentials { get; set; }
+
+    /// <summary>
+    /// Azure DevOps Services OAuth scope (cloud / Entra only).
     /// </summary>
     public string OAuthScope { get; set; } =
         "499b84ac-1321-427f-aa17-267ca6975798/user_impersonation";
 
     /// <summary>
-    /// When true (and Azure AD SSO is enabled), create-release requires ADO project access.
+    /// When true, create-release verifies the configured ADO project is reachable
+    /// with the current credentials (user OAuth, Windows impersonation, or PAT).
     /// </summary>
     public bool RequireProjectAccessToCreate { get; set; } = true;
 }

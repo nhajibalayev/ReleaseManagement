@@ -12,28 +12,24 @@ public sealed class AzureDevOpsProjectAccessService : IAzureDevOpsProjectAccessS
 {
     private readonly HttpClient _httpClient;
     private readonly AzureDevOpsOptions _options;
-    private readonly AzureAdOptions _azureAd;
     private readonly IAzureDevOpsTokenProvider _tokenProvider;
     private readonly ILogger<AzureDevOpsProjectAccessService> _logger;
 
     public AzureDevOpsProjectAccessService(
         HttpClient httpClient,
         IOptions<AzureDevOpsOptions> options,
-        IOptions<AzureAdOptions> azureAd,
         IAzureDevOpsTokenProvider tokenProvider,
         ILogger<AzureDevOpsProjectAccessService> logger)
     {
         _httpClient = httpClient;
         _options = options.Value;
-        _azureAd = azureAd.Value;
         _tokenProvider = tokenProvider;
         _logger = logger;
     }
 
     public bool IsEnforced =>
         _options.Enabled &&
-        _options.RequireProjectAccessToCreate &&
-        _azureAd.Enabled;
+        _options.RequireProjectAccessToCreate;
 
     public async Task EnsureCurrentUserCanAccessProjectAsync(
         CancellationToken cancellationToken = default)
@@ -49,19 +45,28 @@ public sealed class AzureDevOpsProjectAccessService : IAzureDevOpsProjectAccessS
             throw new InvalidOperationException("Azure DevOps project settings are incomplete.");
         }
 
-        var token = await _tokenProvider.GetAccessTokenAsync(cancellationToken);
-        if (string.IsNullOrWhiteSpace(token))
-        {
-            throw new ForbiddenException(
-                "Sign in with SSO to verify Azure DevOps board access before creating a release.");
-        }
-
         var url =
-            $"{_options.OrganizationUrl.TrimEnd('/')}/_apis/projects/{Uri.EscapeDataString(_options.Project)}?api-version=7.1";
+            $"{_options.OrganizationUrl.TrimEnd('/')}/_apis/projects/{Uri.EscapeDataString(_options.Project)}?api-version={_options.ApiVersion}";
 
         using var request = new HttpRequestMessage(HttpMethod.Get, url);
-        request.Headers.Authorization = new AuthenticationHeaderValue("Bearer", token);
         request.Headers.Accept.Add(new MediaTypeWithQualityHeaderValue("application/json"));
+
+        var oauthToken = await _tokenProvider.GetAccessTokenAsync(cancellationToken);
+        if (!string.IsNullOrWhiteSpace(oauthToken))
+        {
+            request.Headers.Authorization = new AuthenticationHeaderValue("Bearer", oauthToken);
+        }
+        else if (!string.IsNullOrWhiteSpace(_options.PersonalAccessToken))
+        {
+            var basic = Convert.ToBase64String(
+                Encoding.ASCII.GetBytes($":{_options.PersonalAccessToken}"));
+            request.Headers.Authorization = new AuthenticationHeaderValue("Basic", basic);
+        }
+        else if (!_options.UseWindowsCredentials)
+        {
+            throw new ForbiddenException(
+                "Azure DevOps credentials are not configured. Provide a PAT or enable Windows credentials.");
+        }
 
         using var response = await _httpClient.SendAsync(request, cancellationToken);
         if (response.IsSuccessStatusCode)

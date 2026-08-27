@@ -21,9 +21,18 @@
             </div>
         }
 
-        @if (Model.AzureAdEnabled)
+        @if (Model.WindowsAuthEnabled)
         {
             <a class="btn btn-accent w-100 mb-3"
+               asp-action="WindowsLogin"
+               asp-route-returnUrl="@Model.ReturnUrl">
+                Sign in with Windows / Active Directory
+            </a>
+        }
+
+        @if (Model.AzureAdEnabled)
+        {
+            <a class="btn btn-outline-primary w-100 mb-3"
                asp-action="ExternalLogin"
                asp-route-returnUrl="@Model.ReturnUrl">
                 Sign in with Microsoft
@@ -32,7 +41,7 @@
 
         @if (Model.AllowLocalLogin)
         {
-            @if (Model.AzureAdEnabled)
+            @if (Model.WindowsAuthEnabled || Model.AzureAdEnabled)
             {
                 <div class="text-center text-muted small mb-3">or use a local account</div>
             }

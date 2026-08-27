@@ -16,6 +16,8 @@ public sealed class LoginViewModel
 
     public string? ReturnUrl { get; set; }
 
+    public bool WindowsAuthEnabled { get; set; }
+
     public bool AzureAdEnabled { get; set; }
 
     public bool AllowLocalLogin { get; set; } = true;

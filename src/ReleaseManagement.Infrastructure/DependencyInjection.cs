@@ -1,5 +1,6 @@
 using Hangfire;
 using Hangfire.PostgreSql;
+using Microsoft.AspNetCore.Authentication.Negotiate;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
@@ -29,6 +30,7 @@ public static class DependencyInjection
     {
         services.Configure<AzureDevOpsOptions>(configuration.GetSection(AzureDevOpsOptions.SectionName));
         services.Configure<AzureAdOptions>(configuration.GetSection(AzureAdOptions.SectionName));
+        services.Configure<WindowsAuthOptions>(configuration.GetSection(WindowsAuthOptions.SectionName));
         services.Configure<EmailOptions>(configuration.GetSection(EmailOptions.SectionName));
         services.Configure<FileStorageOptions>(configuration.GetSection(FileStorageOptions.SectionName));
         services.Configure<SeedOptions>(configuration.GetSection(SeedOptions.SectionName));
@@ -37,6 +39,8 @@ public static class DependencyInjection
         var connectionString = configuration.GetConnectionString("DefaultConnection");
         var azureAd = configuration.GetSection(AzureAdOptions.SectionName).Get<AzureAdOptions>()
             ?? new AzureAdOptions();
+        var windowsAuth = configuration.GetSection(WindowsAuthOptions.SectionName).Get<WindowsAuthOptions>()
+            ?? new WindowsAuthOptions();
         var azureDevOps = configuration.GetSection(AzureDevOpsOptions.SectionName).Get<AzureDevOpsOptions>()
             ?? new AzureDevOpsOptions();
 
@@ -79,6 +83,12 @@ public static class DependencyInjection
             options.Cookie.HttpOnly = true;
             options.Cookie.SecurePolicy = Microsoft.AspNetCore.Http.CookieSecurePolicy.SameAsRequest;
         });
+
+        if (windowsAuth.Enabled)
+        {
+            services.AddAuthentication()
+                .AddNegotiate();
+        }
 
         if (azureAd.Enabled)
         {
@@ -123,9 +133,13 @@ public static class DependencyInjection
             {
                 AzureDevOpsHttpClientConfigurator.Configure(client, azureDevOps);
             })
+            .ConfigurePrimaryHttpMessageHandler(() =>
+                AzureDevOpsHttpClientConfigurator.CreateHandler(azureDevOps))
             .AddStandardResilienceHandler();
 
         services.AddHttpClient<IAzureDevOpsProjectAccessService, AzureDevOpsProjectAccessService>()
+            .ConfigurePrimaryHttpMessageHandler(() =>
+                AzureDevOpsHttpClientConfigurator.CreateHandler(azureDevOps))
             .AddStandardResilienceHandler();
 
         if (!demoMode)

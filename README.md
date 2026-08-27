@@ -21,9 +21,50 @@ dotnet run --project src/ReleaseManagement.Web
 
 Development seed users (password `ChangeMe!123`): `admin`, `po`, `rm`, `pentest`, `infosec`, `business`, `devops`, `auditor`.
 
-## Azure AD SSO + Azure DevOps (delegated tokens)
+## On-prem Azure DevOps Server + Windows / AD login (nh-nk)
 
-Configure via **User Secrets** on `ReleaseManagement.Web` (do not commit secrets):
+Typical corporate setup (on-prem collection, same AD credentials as the PC):
+
+```json
+{
+  "WindowsAuth": {
+    "Enabled": true,
+    "AllowLocalLogin": true,
+    "DefaultRole": "ProductOwner"
+  },
+  "AzureAd": {
+    "Enabled": false
+  },
+  "AzureDevOps": {
+    "Enabled": true,
+    "OrganizationUrl": "https://devops.nh-nk.az/DefaultCollection",
+    "Project": "<project-name>",
+    "PersonalAccessToken": "<pat>",
+    "WorkItemType": "Task",
+    "ApiVersion": "7.1",
+    "UseWindowsCredentials": false,
+    "RequireProjectAccessToCreate": true
+  }
+}
+```
+
+Store secrets with User Secrets (do not commit PAT):
+
+```powershell
+cd src/ReleaseManagement.Web
+dotnet user-secrets init
+dotnet user-secrets set "AzureDevOps:PersonalAccessToken" "<pat>"
+dotnet user-secrets set "AzureDevOps:Project" "<project-name>"
+dotnet user-secrets set "WindowsAuth:Enabled" "true"
+dotnet user-secrets set "AzureDevOps:Enabled" "true"
+```
+
+Notes:
+- Login page shows **Sign in with Windows / Active Directory** (Negotiate). Works best on a domain-joined Windows machine / IIS.
+- API calls to DevOps use the PAT by default (reliable for Hangfire background jobs). Set `UseWindowsCredentials: true` only if the app pool / process identity should call ADO with Windows auth instead.
+- If create-release access checks fail on older servers, try `ApiVersion` `6.0` or `5.1`.
+
+## Azure AD SSO + Azure DevOps Services (cloud, optional)
 
 ```json
 {
@@ -50,7 +91,7 @@ Entra ID app registration needs:
 - API permission: Azure DevOps `user_impersonation` (+ admin consent)
 - Optional Graph: `User.Read`
 
-With SSO enabled, create-release checks that the signed-in user can access the configured ADO project. Work item create/update uses the user's OAuth access token (PAT remains an optional fallback).
+With cloud SSO enabled, create-release can check project access via the user's OAuth token (PAT remains a fallback).
 
 See [Stage 1 Architecture](docs/ARCHITECTURE.md) for the solution design,
 workflow, entities, controllers, views, and package plan.

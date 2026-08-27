@@ -1,4 +1,6 @@
 using System.Security.Claims;
+using Microsoft.AspNetCore.Authentication;
+using Microsoft.AspNetCore.Authentication.Negotiate;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.AspNetCore.Mvc;
@@ -17,29 +19,27 @@ public sealed class AccountController : Controller
     private readonly UserManager<AppIdentityUser> _userManager;
     private readonly IExternalUserProvisioner _externalUserProvisioner;
     private readonly AzureAdOptions _azureAd;
+    private readonly WindowsAuthOptions _windowsAuth;
 
     public AccountController(
         SignInManager<AppIdentityUser> signInManager,
         UserManager<AppIdentityUser> userManager,
         IExternalUserProvisioner externalUserProvisioner,
-        IOptions<AzureAdOptions> azureAd)
+        IOptions<AzureAdOptions> azureAd,
+        IOptions<WindowsAuthOptions> windowsAuth)
     {
         _signInManager = signInManager;
         _userManager = userManager;
         _externalUserProvisioner = externalUserProvisioner;
         _azureAd = azureAd.Value;
+        _windowsAuth = windowsAuth.Value;
     }
 
     [HttpGet]
     [AllowAnonymous]
     public IActionResult Login(string? returnUrl = null)
     {
-        return View(new LoginViewModel
-        {
-            ReturnUrl = returnUrl,
-            AzureAdEnabled = _azureAd.Enabled,
-            AllowLocalLogin = !_azureAd.Enabled || _azureAd.AllowLocalLogin
-        });
+        return View(BuildLoginModel(returnUrl));
     }
 
     [HttpPost]
@@ -47,12 +47,11 @@ public sealed class AccountController : Controller
     [ValidateAntiForgeryToken]
     public async Task<IActionResult> Login(LoginViewModel model, CancellationToken cancellationToken)
     {
-        model.AzureAdEnabled = _azureAd.Enabled;
-        model.AllowLocalLogin = !_azureAd.Enabled || _azureAd.AllowLocalLogin;
+        ApplyLoginFlags(model);
 
-        if (_azureAd.Enabled && !_azureAd.AllowLocalLogin)
+        if (!model.AllowLocalLogin)
         {
-            ModelState.AddModelError(string.Empty, "Local login is disabled. Use Microsoft SSO.");
+            ModelState.AddModelError(string.Empty, "Local login is disabled. Use Windows or Microsoft sign-in.");
             return View(model);
         }
 
@@ -81,12 +80,46 @@ public sealed class AccountController : Controller
             return View(model);
         }
 
-        if (!string.IsNullOrWhiteSpace(model.ReturnUrl) && Url.IsLocalUrl(model.ReturnUrl))
+        return RedirectAfterLogin(model.ReturnUrl);
+    }
+
+    [HttpGet]
+    [AllowAnonymous]
+    public async Task<IActionResult> WindowsLogin(
+        string? returnUrl = null,
+        CancellationToken cancellationToken = default)
+    {
+        if (!_windowsAuth.Enabled)
         {
-            return Redirect(model.ReturnUrl);
+            return RedirectToAction(nameof(Login));
         }
 
-        return RedirectToAction("Index", "Home");
+        var authenticateResult = await HttpContext.AuthenticateAsync(
+            NegotiateDefaults.AuthenticationScheme);
+
+        if (!authenticateResult.Succeeded || authenticateResult.Principal is null)
+        {
+            return Challenge(
+                new AuthenticationProperties
+                {
+                    RedirectUri = Url.Action(nameof(WindowsLogin), new { returnUrl })
+                },
+                NegotiateDefaults.AuthenticationScheme);
+        }
+
+        var user = await _externalUserProvisioner.ProvisionFromWindowsAsync(
+            authenticateResult.Principal,
+            cancellationToken);
+
+        if (!user.IsActive)
+        {
+            TempData["Error"] = "Your account is deactivated.";
+            return RedirectToAction(nameof(Login));
+        }
+
+        await _signInManager.SignInAsync(user, isPersistent: true);
+
+        return RedirectAfterLogin(returnUrl);
     }
 
     [HttpGet]
@@ -140,37 +173,32 @@ public sealed class AccountController : Controller
             return RedirectToAction(nameof(Login));
         }
 
-            var loginResult = await _userManager.AddLoginAsync(user, info);
-            if (!loginResult.Succeeded &&
-                !loginResult.Errors.Any(error =>
-                    error.Code.Contains("LoginAlreadyAssociated", StringComparison.OrdinalIgnoreCase) ||
-                    error.Description.Contains("already", StringComparison.OrdinalIgnoreCase)))
-            {
-                TempData["Error"] = string.Join("; ", loginResult.Errors.Select(error => error.Description));
-                return RedirectToAction(nameof(Login));
-            }
+        var loginResult = await _userManager.AddLoginAsync(user, info);
+        if (!loginResult.Succeeded &&
+            !loginResult.Errors.Any(error =>
+                error.Code.Contains("LoginAlreadyAssociated", StringComparison.OrdinalIgnoreCase) ||
+                error.Description.Contains("already", StringComparison.OrdinalIgnoreCase)))
+        {
+            TempData["Error"] = string.Join("; ", loginResult.Errors.Select(error => error.Description));
+            return RedirectToAction(nameof(Login));
+        }
 
-        var extraClaims = new List<System.Security.Claims.Claim>();
+        var extraClaims = new List<Claim>();
         var oid = info.Principal.FindFirstValue("oid");
         var tid = info.Principal.FindFirstValue("tid");
         if (!string.IsNullOrWhiteSpace(oid))
         {
-            extraClaims.Add(new System.Security.Claims.Claim("oid", oid));
+            extraClaims.Add(new Claim("oid", oid));
         }
 
         if (!string.IsNullOrWhiteSpace(tid))
         {
-            extraClaims.Add(new System.Security.Claims.Claim("tid", tid));
+            extraClaims.Add(new Claim("tid", tid));
         }
 
         await _signInManager.SignInWithClaimsAsync(user, isPersistent: false, extraClaims);
 
-        if (!string.IsNullOrWhiteSpace(returnUrl) && Url.IsLocalUrl(returnUrl))
-        {
-            return Redirect(returnUrl);
-        }
-
-        return RedirectToAction("Index", "Home");
+        return RedirectAfterLogin(returnUrl);
     }
 
     [HttpPost]
@@ -182,7 +210,7 @@ public sealed class AccountController : Controller
         if (_azureAd.Enabled)
         {
             return SignOut(
-                new Microsoft.AspNetCore.Authentication.AuthenticationProperties
+                new AuthenticationProperties
                 {
                     RedirectUri = Url.Action(nameof(Login), "Account")
                 },
@@ -198,5 +226,41 @@ public sealed class AccountController : Controller
     public IActionResult AccessDenied()
     {
         return View();
+    }
+
+    private LoginViewModel BuildLoginModel(string? returnUrl)
+    {
+        var model = new LoginViewModel { ReturnUrl = returnUrl };
+        ApplyLoginFlags(model);
+        return model;
+    }
+
+    private void ApplyLoginFlags(LoginViewModel model)
+    {
+        model.WindowsAuthEnabled = _windowsAuth.Enabled;
+        model.AzureAdEnabled = _azureAd.Enabled;
+
+        var allowLocal = true;
+        if (_windowsAuth.Enabled)
+        {
+            allowLocal = _windowsAuth.AllowLocalLogin;
+        }
+
+        if (_azureAd.Enabled)
+        {
+            allowLocal = allowLocal && _azureAd.AllowLocalLogin;
+        }
+
+        model.AllowLocalLogin = allowLocal;
+    }
+
+    private IActionResult RedirectAfterLogin(string? returnUrl)
+    {
+        if (!string.IsNullOrWhiteSpace(returnUrl) && Url.IsLocalUrl(returnUrl))
+        {
+            return Redirect(returnUrl);
+        }
+
+        return RedirectToAction("Index", "Home");
     }
 }

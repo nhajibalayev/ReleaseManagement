@@ -44,7 +44,7 @@ public sealed class AzureDevOpsService : IAzureDevOpsService
 
         using var request = new HttpRequestMessage(
             HttpMethod.Post,
-            $"{_options.OrganizationUrl.TrimEnd('/')}/{_options.Project}/_apis/wit/workitems/${_options.WorkItemType}?api-version=7.1")
+            $"{_options.OrganizationUrl.TrimEnd('/')}/{_options.Project}/_apis/wit/workitems/${_options.WorkItemType}?api-version={_options.ApiVersion}")
         {
             Content = new StringContent(
                 JsonSerializer.Serialize(document),
@@ -99,7 +99,7 @@ public sealed class AzureDevOpsService : IAzureDevOpsService
 
         using var request = new HttpRequestMessage(
             HttpMethod.Patch,
-            $"{_options.OrganizationUrl.TrimEnd('/')}/{_options.Project}/_apis/wit/workitems/{release.AzureDevOpsWorkItemId}?api-version=7.1")
+            $"{_options.OrganizationUrl.TrimEnd('/')}/{_options.Project}/_apis/wit/workitems/{release.AzureDevOpsWorkItemId}?api-version={_options.ApiVersion}")
         {
             Content = new StringContent(
                 JsonSerializer.Serialize(document),
@@ -133,7 +133,7 @@ public sealed class AzureDevOpsService : IAzureDevOpsService
 
         using var request = new HttpRequestMessage(
             HttpMethod.Patch,
-            $"{_options.OrganizationUrl.TrimEnd('/')}/{_options.Project}/_apis/wit/workitems/{workItemId}?api-version=7.1")
+            $"{_options.OrganizationUrl.TrimEnd('/')}/{_options.Project}/_apis/wit/workitems/{workItemId}?api-version={_options.ApiVersion}")
         {
             Content = new StringContent(
                 JsonSerializer.Serialize(document),
@@ -162,7 +162,7 @@ public sealed class AzureDevOpsService : IAzureDevOpsService
 
         using var request = new HttpRequestMessage(
             HttpMethod.Get,
-            $"{_options.OrganizationUrl.TrimEnd('/')}/{_options.Project}/_apis/wit/workitems?ids={string.Join(',', ids)}&api-version=7.1");
+            $"{_options.OrganizationUrl.TrimEnd('/')}/{_options.Project}/_apis/wit/workitems?ids={string.Join(',', ids)}&api-version={_options.ApiVersion}");
 
         await ApplyAuthorizationAsync(request, accessToken, cancellationToken);
 
@@ -242,5 +242,14 @@ public static class AzureDevOpsHttpClientConfigurator
 
         client.DefaultRequestHeaders.Accept.Add(
             new MediaTypeWithQualityHeaderValue("application/json"));
+    }
+
+    public static HttpMessageHandler CreateHandler(AzureDevOpsOptions options)
+    {
+        return new HttpClientHandler
+        {
+            UseDefaultCredentials = options.UseWindowsCredentials,
+            PreAuthenticate = options.UseWindowsCredentials
+        };
     }
 }
