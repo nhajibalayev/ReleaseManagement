@@ -21,6 +21,7 @@ public sealed class ReleaseWorkflowService : IReleaseWorkflowService
     private readonly INotificationService _notifications;
     private readonly IAuditService _audit;
     private readonly IOutboxWriter _outbox;
+    private readonly IAzureDevOpsTokenProvider _azureDevOpsTokenProvider;
     private readonly IValidator<TransitionReleaseRequest> _transitionValidator;
 
     public ReleaseWorkflowService(
@@ -31,6 +32,7 @@ public sealed class ReleaseWorkflowService : IReleaseWorkflowService
         INotificationService notifications,
         IAuditService audit,
         IOutboxWriter outbox,
+        IAzureDevOpsTokenProvider azureDevOpsTokenProvider,
         IValidator<TransitionReleaseRequest> transitionValidator)
     {
         _dbContext = dbContext;
@@ -40,6 +42,7 @@ public sealed class ReleaseWorkflowService : IReleaseWorkflowService
         _notifications = notifications;
         _audit = audit;
         _outbox = outbox;
+        _azureDevOpsTokenProvider = azureDevOpsTokenProvider;
         _transitionValidator = transitionValidator;
     }
 
@@ -141,7 +144,12 @@ public sealed class ReleaseWorkflowService : IReleaseWorkflowService
 
         await _outbox.EnqueueAsync(
             OutboxMessageTypes.AzureDevOpsUpdateWorkItem,
-            JsonSerializer.Serialize(new { ReleaseId = release.Id, Status = release.CurrentStatus }),
+            JsonSerializer.Serialize(new
+            {
+                ReleaseId = release.Id,
+                Status = release.CurrentStatus,
+                AccessToken = await _azureDevOpsTokenProvider.GetAccessTokenAsync(cancellationToken)
+            }),
             idempotencyKey: $"ado-update:{release.Id}:{release.CurrentStatus}:{release.UpdatedDate:O}",
             cancellationToken);
 
@@ -226,7 +234,11 @@ public sealed class ReleaseWorkflowService : IReleaseWorkflowService
 
             await _outbox.EnqueueAsync(
                 OutboxMessageTypes.AzureDevOpsCreateWorkItem,
-                JsonSerializer.Serialize(new { ReleaseId = submitted.Id }),
+                JsonSerializer.Serialize(new
+                {
+                    ReleaseId = submitted.Id,
+                    AccessToken = await _azureDevOpsTokenProvider.GetAccessTokenAsync(cancellationToken)
+                }),
                 idempotencyKey: $"ado-create:{submitted.Id}",
                 cancellationToken);
 

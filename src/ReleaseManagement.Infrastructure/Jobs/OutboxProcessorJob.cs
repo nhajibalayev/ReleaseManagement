@@ -94,6 +94,9 @@ public sealed class OutboxProcessorJob
 
         using var document = JsonDocument.Parse(message.PayloadJson);
         var releaseId = document.RootElement.GetProperty("ReleaseId").GetGuid();
+        var accessToken = document.RootElement.TryGetProperty("AccessToken", out var tokenProperty)
+            ? tokenProperty.GetString()
+            : null;
         var release = await dbContext.Releases.SingleAsync(item => item.Id == releaseId);
 
         if (release.AzureDevOpsWorkItemId.HasValue)
@@ -101,7 +104,7 @@ public sealed class OutboxProcessorJob
             return;
         }
 
-        var result = await azureDevOps.CreateReleaseWorkItemAsync(release);
+        var result = await azureDevOps.CreateReleaseWorkItemAsync(release, accessToken);
         release.SetAzureDevOpsWorkItem(result.WorkItemId, result.WorkItemUrl, clock.UtcNow);
 
         var mapping = await dbContext.AzureDevOpsMappings
@@ -135,6 +138,9 @@ public sealed class OutboxProcessorJob
 
         using var document = JsonDocument.Parse(message.PayloadJson);
         var releaseId = document.RootElement.GetProperty("ReleaseId").GetGuid();
+        var accessToken = document.RootElement.TryGetProperty("AccessToken", out var tokenProperty)
+            ? tokenProperty.GetString()
+            : null;
         var release = await dbContext.Releases.SingleAsync(item => item.Id == releaseId);
 
         if (!release.AzureDevOpsWorkItemId.HasValue)
@@ -142,7 +148,7 @@ public sealed class OutboxProcessorJob
             return;
         }
 
-        await azureDevOps.UpdateReleaseWorkItemAsync(release);
+        await azureDevOps.UpdateReleaseWorkItemAsync(release, accessToken);
     }
 
     private static async Task HandleEmailAsync(

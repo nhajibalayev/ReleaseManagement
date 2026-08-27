@@ -4,6 +4,7 @@ using Microsoft.AspNetCore.Identity;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Identity.Web;
 using ReleaseManagement.Application;
 using ReleaseManagement.Application.Abstractions;
 using ReleaseManagement.Application.Authorization;
@@ -27,12 +28,17 @@ public static class DependencyInjection
         IConfiguration configuration)
     {
         services.Configure<AzureDevOpsOptions>(configuration.GetSection(AzureDevOpsOptions.SectionName));
+        services.Configure<AzureAdOptions>(configuration.GetSection(AzureAdOptions.SectionName));
         services.Configure<EmailOptions>(configuration.GetSection(EmailOptions.SectionName));
         services.Configure<FileStorageOptions>(configuration.GetSection(FileStorageOptions.SectionName));
         services.Configure<SeedOptions>(configuration.GetSection(SeedOptions.SectionName));
 
         var demoMode = configuration.GetValue<bool>("DemoMode");
         var connectionString = configuration.GetConnectionString("DefaultConnection");
+        var azureAd = configuration.GetSection(AzureAdOptions.SectionName).Get<AzureAdOptions>()
+            ?? new AzureAdOptions();
+        var azureDevOps = configuration.GetSection(AzureDevOpsOptions.SectionName).Get<AzureDevOpsOptions>()
+            ?? new AzureDevOpsOptions();
 
         services.AddDbContext<ApplicationDbContext>(options =>
         {
@@ -74,6 +80,30 @@ public static class DependencyInjection
             options.Cookie.SecurePolicy = Microsoft.AspNetCore.Http.CookieSecurePolicy.SameAsRequest;
         });
 
+        if (azureAd.Enabled)
+        {
+            services.AddAuthentication()
+                .AddMicrosoftIdentityWebApp(
+                    configuration.GetSection(AzureAdOptions.SectionName),
+                    openIdConnectScheme: "AzureAd",
+                    cookieScheme: null)
+                .EnableTokenAcquisitionToCallDownstreamApi(
+                    [azureDevOps.OAuthScope])
+                .AddInMemoryTokenCaches();
+
+            services.Configure<Microsoft.AspNetCore.Authentication.OpenIdConnect.OpenIdConnectOptions>(
+                "AzureAd",
+                options =>
+                {
+                    options.SignInScheme = IdentityConstants.ExternalScheme;
+                    options.SaveTokens = true;
+                    if (!options.Scope.Contains(azureDevOps.OAuthScope))
+                    {
+                        options.Scope.Add(azureDevOps.OAuthScope);
+                    }
+                });
+        }
+
         services.AddHttpContextAccessor();
         services.AddScoped<ICurrentUserService, CurrentUserService>();
         services.AddSingleton<IClock, SystemClock>();
@@ -83,17 +113,19 @@ public static class DependencyInjection
         services.AddScoped<IFileStorageService, LocalFileStorageService>();
         services.AddScoped<IEmailSender, LoggingEmailSender>();
         services.AddScoped<INotificationService, NotificationService>();
+        services.AddScoped<IExternalUserProvisioner, ExternalUserProvisioner>();
+        services.AddScoped<IAzureDevOpsTokenProvider, AzureDevOpsTokenProvider>();
         services.AddScoped<DevelopmentDataSeeder>();
         services.AddTransient<OutboxProcessorJob>();
         services.AddTransient<TemporaryFileCleanupJob>();
 
-        services.AddHttpClient<IAzureDevOpsService, AzureDevOpsService>((provider, client) =>
+        services.AddHttpClient<IAzureDevOpsService, AzureDevOpsService>((_, client) =>
             {
-                var options = configuration
-                    .GetSection(AzureDevOpsOptions.SectionName)
-                    .Get<AzureDevOpsOptions>() ?? new AzureDevOpsOptions();
-                AzureDevOpsHttpClientConfigurator.Configure(client, options);
+                AzureDevOpsHttpClientConfigurator.Configure(client, azureDevOps);
             })
+            .AddStandardResilienceHandler();
+
+        services.AddHttpClient<IAzureDevOpsProjectAccessService, AzureDevOpsProjectAccessService>()
             .AddStandardResilienceHandler();
 
         if (!demoMode)

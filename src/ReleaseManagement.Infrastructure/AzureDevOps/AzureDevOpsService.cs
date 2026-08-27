@@ -13,20 +13,24 @@ public sealed class AzureDevOpsService : IAzureDevOpsService
 {
     private readonly HttpClient _httpClient;
     private readonly AzureDevOpsOptions _options;
+    private readonly IAzureDevOpsTokenProvider _tokenProvider;
     private readonly ILogger<AzureDevOpsService> _logger;
 
     public AzureDevOpsService(
         HttpClient httpClient,
         IOptions<AzureDevOpsOptions> options,
+        IAzureDevOpsTokenProvider tokenProvider,
         ILogger<AzureDevOpsService> logger)
     {
         _httpClient = httpClient;
         _options = options.Value;
+        _tokenProvider = tokenProvider;
         _logger = logger;
     }
 
     public async Task<AzureDevOpsWorkItemResult> CreateReleaseWorkItemAsync(
         Release release,
+        string? accessToken = null,
         CancellationToken cancellationToken = default)
     {
         EnsureConfigured();
@@ -38,15 +42,19 @@ public sealed class AzureDevOpsService : IAzureDevOpsService
             new { op = "add", path = "/fields/System.Tags", value = $"ReleaseManagement;{release.ReleaseNumber}" }
         };
 
-        using var content = new StringContent(
-            JsonSerializer.Serialize(document),
-            Encoding.UTF8,
-            "application/json-patch+json");
+        using var request = new HttpRequestMessage(
+            HttpMethod.Post,
+            $"{_options.OrganizationUrl.TrimEnd('/')}/{_options.Project}/_apis/wit/workitems/${_options.WorkItemType}?api-version=7.1")
+        {
+            Content = new StringContent(
+                JsonSerializer.Serialize(document),
+                Encoding.UTF8,
+                "application/json-patch+json")
+        };
 
-        var url =
-            $"{_options.OrganizationUrl.TrimEnd('/')}/{_options.Project}/_apis/wit/workitems/${_options.WorkItemType}?api-version=7.1";
+        await ApplyAuthorizationAsync(request, accessToken, cancellationToken);
 
-        using var response = await _httpClient.PostAsync(url, content, cancellationToken);
+        using var response = await _httpClient.SendAsync(request, cancellationToken);
         var body = await response.Content.ReadAsStringAsync(cancellationToken);
 
         if (!response.IsSuccessStatusCode)
@@ -69,6 +77,7 @@ public sealed class AzureDevOpsService : IAzureDevOpsService
 
     public async Task UpdateReleaseWorkItemAsync(
         Release release,
+        string? accessToken = null,
         CancellationToken cancellationToken = default)
     {
         EnsureConfigured();
@@ -88,15 +97,19 @@ public sealed class AzureDevOpsService : IAzureDevOpsService
             }
         };
 
-        using var content = new StringContent(
-            JsonSerializer.Serialize(document),
-            Encoding.UTF8,
-            "application/json-patch+json");
+        using var request = new HttpRequestMessage(
+            HttpMethod.Patch,
+            $"{_options.OrganizationUrl.TrimEnd('/')}/{_options.Project}/_apis/wit/workitems/{release.AzureDevOpsWorkItemId}?api-version=7.1")
+        {
+            Content = new StringContent(
+                JsonSerializer.Serialize(document),
+                Encoding.UTF8,
+                "application/json-patch+json")
+        };
 
-        var url =
-            $"{_options.OrganizationUrl.TrimEnd('/')}/{_options.Project}/_apis/wit/workitems/{release.AzureDevOpsWorkItemId}?api-version=7.1";
+        await ApplyAuthorizationAsync(request, accessToken, cancellationToken);
 
-        using var response = await _httpClient.PatchAsync(url, content, cancellationToken);
+        using var response = await _httpClient.SendAsync(request, cancellationToken);
         if (!response.IsSuccessStatusCode)
         {
             var body = await response.Content.ReadAsStringAsync(cancellationToken);
@@ -108,6 +121,7 @@ public sealed class AzureDevOpsService : IAzureDevOpsService
     public async Task AddCommentAsync(
         int workItemId,
         string comment,
+        string? accessToken = null,
         CancellationToken cancellationToken = default)
     {
         EnsureConfigured();
@@ -117,20 +131,25 @@ public sealed class AzureDevOpsService : IAzureDevOpsService
             new { op = "add", path = "/fields/System.History", value = comment }
         };
 
-        using var content = new StringContent(
-            JsonSerializer.Serialize(document),
-            Encoding.UTF8,
-            "application/json-patch+json");
+        using var request = new HttpRequestMessage(
+            HttpMethod.Patch,
+            $"{_options.OrganizationUrl.TrimEnd('/')}/{_options.Project}/_apis/wit/workitems/{workItemId}?api-version=7.1")
+        {
+            Content = new StringContent(
+                JsonSerializer.Serialize(document),
+                Encoding.UTF8,
+                "application/json-patch+json")
+        };
 
-        var url =
-            $"{_options.OrganizationUrl.TrimEnd('/')}/{_options.Project}/_apis/wit/workitems/{workItemId}?api-version=7.1";
+        await ApplyAuthorizationAsync(request, accessToken, cancellationToken);
 
-        using var response = await _httpClient.PatchAsync(url, content, cancellationToken);
+        using var response = await _httpClient.SendAsync(request, cancellationToken);
         response.EnsureSuccessStatusCode();
     }
 
     public async Task<IReadOnlyCollection<AzureDevOpsWorkItemDto>> GetLinkedWorkItemsAsync(
         IEnumerable<int> workItemIds,
+        string? accessToken = null,
         CancellationToken cancellationToken = default)
     {
         EnsureConfigured();
@@ -141,10 +160,13 @@ public sealed class AzureDevOpsService : IAzureDevOpsService
             return [];
         }
 
-        var url =
-            $"{_options.OrganizationUrl.TrimEnd('/')}/{_options.Project}/_apis/wit/workitems?ids={string.Join(',', ids)}&api-version=7.1";
+        using var request = new HttpRequestMessage(
+            HttpMethod.Get,
+            $"{_options.OrganizationUrl.TrimEnd('/')}/{_options.Project}/_apis/wit/workitems?ids={string.Join(',', ids)}&api-version=7.1");
 
-        using var response = await _httpClient.GetAsync(url, cancellationToken);
+        await ApplyAuthorizationAsync(request, accessToken, cancellationToken);
+
+        using var response = await _httpClient.SendAsync(request, cancellationToken);
         response.EnsureSuccessStatusCode();
 
         await using var stream = await response.Content.ReadAsStreamAsync(cancellationToken);
@@ -165,6 +187,35 @@ public sealed class AzureDevOpsService : IAzureDevOpsService
         return results;
     }
 
+    private async Task ApplyAuthorizationAsync(
+        HttpRequestMessage request,
+        string? accessToken,
+        CancellationToken cancellationToken)
+    {
+        var token = accessToken;
+        if (string.IsNullOrWhiteSpace(token))
+        {
+            token = await _tokenProvider.GetAccessTokenAsync(cancellationToken);
+        }
+
+        if (!string.IsNullOrWhiteSpace(token))
+        {
+            request.Headers.Authorization = new AuthenticationHeaderValue("Bearer", token);
+            return;
+        }
+
+        if (!string.IsNullOrWhiteSpace(_options.PersonalAccessToken))
+        {
+            var basic = Convert.ToBase64String(
+                Encoding.ASCII.GetBytes($":{_options.PersonalAccessToken}"));
+            request.Headers.Authorization = new AuthenticationHeaderValue("Basic", basic);
+            return;
+        }
+
+        throw new InvalidOperationException(
+            "No Azure DevOps credentials available. Sign in with SSO or configure a PAT.");
+    }
+
     private void EnsureConfigured()
     {
         if (!_options.Enabled)
@@ -173,8 +224,7 @@ public sealed class AzureDevOpsService : IAzureDevOpsService
         }
 
         if (string.IsNullOrWhiteSpace(_options.OrganizationUrl) ||
-            string.IsNullOrWhiteSpace(_options.Project) ||
-            string.IsNullOrWhiteSpace(_options.PersonalAccessToken))
+            string.IsNullOrWhiteSpace(_options.Project))
         {
             throw new InvalidOperationException("Azure DevOps settings are incomplete.");
         }
@@ -192,13 +242,5 @@ public static class AzureDevOpsHttpClientConfigurator
 
         client.DefaultRequestHeaders.Accept.Add(
             new MediaTypeWithQualityHeaderValue("application/json"));
-
-        if (!string.IsNullOrWhiteSpace(options.PersonalAccessToken))
-        {
-            var token = Convert.ToBase64String(
-                Encoding.ASCII.GetBytes($":{options.PersonalAccessToken}"));
-            client.DefaultRequestHeaders.Authorization =
-                new AuthenticationHeaderValue("Basic", token);
-        }
     }
 }

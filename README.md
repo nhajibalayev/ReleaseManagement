@@ -21,6 +21,36 @@ dotnet run --project src/ReleaseManagement.Web
 
 Development seed users (password `ChangeMe!123`): `admin`, `po`, `rm`, `pentest`, `infosec`, `business`, `devops`, `auditor`.
 
+## Azure AD SSO + Azure DevOps (delegated tokens)
+
+Configure via **User Secrets** on `ReleaseManagement.Web` (do not commit secrets):
+
+```json
+{
+  "AzureAd": {
+    "Enabled": true,
+    "TenantId": "<tenant-guid>",
+    "ClientId": "<app-client-id>",
+    "ClientSecret": "<app-secret>",
+    "AllowLocalLogin": true,
+    "DefaultRole": "ProductOwner"
+  },
+  "AzureDevOps": {
+    "Enabled": true,
+    "OrganizationUrl": "https://dev.azure.com/<org>",
+    "Project": "<project>",
+    "WorkItemType": "Task",
+    "RequireProjectAccessToCreate": true
+  }
+}
+```
+
+Entra ID app registration needs:
+- Redirect URI: `https://localhost:7171/signin-oidc` (and prod URL)
+- API permission: Azure DevOps `user_impersonation` (+ admin consent)
+- Optional Graph: `User.Read`
+
+With SSO enabled, create-release checks that the signed-in user can access the configured ADO project. Work item create/update uses the user's OAuth access token (PAT remains an optional fallback).
 
 See [Stage 1 Architecture](docs/ARCHITECTURE.md) for the solution design,
 workflow, entities, controllers, views, and package plan.

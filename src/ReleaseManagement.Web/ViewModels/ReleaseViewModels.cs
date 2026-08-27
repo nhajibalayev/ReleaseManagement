@@ -5,11 +5,9 @@ namespace ReleaseManagement.Web.ViewModels;
 
 public sealed class LoginViewModel
 {
-    [Required]
     [Display(Name = "User name")]
     public string UserName { get; set; } = string.Empty;
 
-    [Required]
     [DataType(DataType.Password)]
     public string Password { get; set; } = string.Empty;
 
@@ -17,6 +15,10 @@ public sealed class LoginViewModel
     public bool RememberMe { get; set; }
 
     public string? ReturnUrl { get; set; }
+
+    public bool AzureAdEnabled { get; set; }
+
+    public bool AllowLocalLogin { get; set; } = true;
 }
 
 public sealed class DashboardViewModel

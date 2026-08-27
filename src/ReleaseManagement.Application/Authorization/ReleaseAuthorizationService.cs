@@ -12,13 +12,16 @@ public sealed class ReleaseAuthorizationService : IReleaseAuthorizationService
 {
     private readonly IApplicationDbContext _dbContext;
     private readonly ICurrentUserService _currentUser;
+    private readonly IAzureDevOpsProjectAccessService _azureDevOpsProjectAccess;
 
     public ReleaseAuthorizationService(
         IApplicationDbContext dbContext,
-        ICurrentUserService currentUser)
+        ICurrentUserService currentUser,
+        IAzureDevOpsProjectAccessService azureDevOpsProjectAccess)
     {
         _dbContext = dbContext;
         _currentUser = currentUser;
+        _azureDevOpsProjectAccess = azureDevOpsProjectAccess;
     }
 
     public async Task EnsureCanViewAsync(Guid releaseId, CancellationToken cancellationToken = default)
@@ -49,6 +52,7 @@ public sealed class ReleaseAuthorizationService : IReleaseAuthorizationService
 
         if (IsPrivilegedViewerOrAdmin())
         {
+            await _azureDevOpsProjectAccess.EnsureCurrentUserCanAccessProjectAsync(cancellationToken);
             return;
         }
 
@@ -70,6 +74,8 @@ public sealed class ReleaseAuthorizationService : IReleaseAuthorizationService
             throw new ForbiddenException(
                 $"You are not allowed to create releases for product '{productId}'.");
         }
+
+        await _azureDevOpsProjectAccess.EnsureCurrentUserCanAccessProjectAsync(cancellationToken);
     }
 
     public async Task<bool> CanViewAsync(Guid releaseId, CancellationToken cancellationToken = default)
