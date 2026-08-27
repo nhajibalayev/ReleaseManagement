@@ -41,8 +41,9 @@ public sealed class ReleaseConfiguration : IEntityTypeConfiguration<Release>
         builder.Property(x => x.RowVersion)
             .HasColumnName("xmin")
             .HasColumnType("xid")
-            .ValueGeneratedOnAddOrUpdate()
-            .IsConcurrencyToken();
+            .ValueGeneratedOnAddOrUpdate();
+        // Not a concurrency token: Npgsql xmin often stays stale in the tracker and
+        // causes DbUpdateConcurrencyException on the next SaveChanges.
 
         builder.HasIndex(x => x.ReleaseNumber).IsUnique();
         builder.HasIndex(x => x.CurrentStatus);

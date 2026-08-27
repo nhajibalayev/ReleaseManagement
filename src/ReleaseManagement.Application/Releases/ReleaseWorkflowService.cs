@@ -162,6 +162,7 @@ public sealed class ReleaseWorkflowService : IReleaseWorkflowService
 
         var release = await _dbContext.Releases
             .Include(item => item.Services)
+            .Include(item => item.Approvals)
             .SingleOrDefaultAsync(item => item.Id == releaseId, cancellationToken);
 
         if (release is null)
@@ -193,61 +194,89 @@ public sealed class ReleaseWorkflowService : IReleaseWorkflowService
             throw new BusinessRuleException(readinessErrors);
         }
 
-        await TransitionAsync(
-            new TransitionReleaseRequest
+        if (!CanTransition(release.CurrentStatus, ReleaseStatus.Submitted, _currentUser.Roles))
+        {
+            throw new ForbiddenException(
+                $"Transition from {release.CurrentStatus} to {ReleaseStatus.Submitted} is not allowed for the current user.");
+        }
+
+        var now = _clock.UtcNow;
+        var submittedFrom = release.CurrentStatus;
+
+        release.TransitionTo(
+            ReleaseStatus.Submitted,
+            _currentUser.Roles,
+            _currentUser.UserId,
+            now,
+            null,
+            ResolveResponsibleUserId(ReleaseStatus.Submitted, null, release.CreatedByUserId),
+            ReleaseStatusDisplay.GetDefaultResponsibleRole(ReleaseStatus.Submitted));
+
+        await _audit.WriteAsync(
+            "Release.Transition",
+            nameof(Release),
+            release.Id.ToString(),
+            new { Status = submittedFrom },
+            new
             {
-                ReleaseId = releaseId,
-                TargetStatus = ReleaseStatus.Submitted,
-                Comment = null
+                Status = release.CurrentStatus,
+                release.CurrentResponsibleRole,
+                release.CurrentResponsibleUserId
             },
             cancellationToken);
 
-        // Advance into the Release Manager queue immediately after a successful submit.
-        var submitted = await _dbContext.Releases
-            .SingleAsync(item => item.Id == releaseId, cancellationToken);
-
-        // First SaveChanges already bumped PostgreSQL xmin; reload concurrency token
-        // before the automatic follow-up transition to avoid DbUpdateConcurrencyException.
-        await _dbContext.ReloadAsync(submitted, cancellationToken);
-
-        if (submitted.CurrentStatus == ReleaseStatus.Submitted &&
-            CanTransition(
+        // Auto-route into Release Manager review in the same unit of work (one SaveChanges).
+        if (CanTransition(
                 ReleaseStatus.Submitted,
                 ReleaseStatus.ReleaseManagerReview,
                 [RoleNames.ReleaseManager, RoleNames.Administrator]))
         {
+            var reviewFrom = release.CurrentStatus;
             var responsibleRole = ReleaseStatusDisplay.GetDefaultResponsibleRole(
                 ReleaseStatus.ReleaseManagerReview);
 
-            submitted.TransitionTo(
+            release.TransitionTo(
                 ReleaseStatus.ReleaseManagerReview,
                 [RoleNames.Administrator],
                 _currentUser.UserId,
-                _clock.UtcNow,
+                now,
                 "Automatically routed to Release Manager review after submit.",
                 null,
                 responsibleRole);
 
             await _notifications.CreateForRoleAsync(
                 RoleNames.ReleaseManager,
-                submitted.Id,
+                release.Id,
                 "Release ready for review",
-                $"{submitted.ReleaseNumber} has been submitted and awaits Release Manager review.",
+                $"{release.ReleaseNumber} has been submitted and awaits Release Manager review.",
                 NotificationType.ActionRequired,
                 cancellationToken);
 
-            await _outbox.EnqueueAsync(
-                OutboxMessageTypes.AzureDevOpsCreateWorkItem,
-                JsonSerializer.Serialize(new
+            await _audit.WriteAsync(
+                "Release.Transition",
+                nameof(Release),
+                release.Id.ToString(),
+                new { Status = reviewFrom },
+                new
                 {
-                    ReleaseId = submitted.Id,
-                    AccessToken = await _azureDevOpsTokenProvider.GetAccessTokenAsync(cancellationToken)
-                }),
-                idempotencyKey: $"ado-create:{submitted.Id}",
+                    Status = release.CurrentStatus,
+                    release.CurrentResponsibleRole,
+                    release.CurrentResponsibleUserId
+                },
                 cancellationToken);
-
-            await _dbContext.SaveChangesAsync(cancellationToken);
         }
+
+        await _outbox.EnqueueAsync(
+            OutboxMessageTypes.AzureDevOpsCreateWorkItem,
+            JsonSerializer.Serialize(new
+            {
+                ReleaseId = release.Id,
+                AccessToken = await _azureDevOpsTokenProvider.GetAccessTokenAsync(cancellationToken)
+            }),
+            idempotencyKey: $"ado-create:{release.Id}",
+            cancellationToken);
+
+        await _dbContext.SaveChangesAsync(cancellationToken);
     }
 
     private static Guid? ResolveResponsibleUserId(
