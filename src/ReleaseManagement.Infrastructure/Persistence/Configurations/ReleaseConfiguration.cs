@@ -38,12 +38,9 @@ public sealed class ReleaseConfiguration : IEntityTypeConfiguration<Release>
         ConfigureUtc(builder.Property(x => x.CreatedDate));
         ConfigureUtc(builder.Property(x => x.UpdatedDate));
 
-        builder.Property(x => x.RowVersion)
-            .HasColumnName("xmin")
-            .HasColumnType("xid")
-            .ValueGeneratedOnAddOrUpdate();
-        // Not a concurrency token: Npgsql xmin often stays stale in the tracker and
-        // causes DbUpdateConcurrencyException on the next SaveChanges.
+        // Do not map PostgreSQL xmin. Npgsql treats xmin mappings as concurrency
+        // tokens and produces false DbUpdateConcurrencyException on updates.
+        builder.Ignore(x => x.RowVersion);
 
         builder.HasIndex(x => x.ReleaseNumber).IsUnique();
         builder.HasIndex(x => x.CurrentStatus);

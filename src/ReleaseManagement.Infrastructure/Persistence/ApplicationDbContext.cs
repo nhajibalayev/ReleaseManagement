@@ -59,6 +59,31 @@ public sealed class ApplicationDbContext
         where TEntity : class
         => Entry(entity).ReloadAsync(cancellationToken);
 
+    public override async Task<int> SaveChangesAsync(CancellationToken cancellationToken = default)
+    {
+        try
+        {
+            return await base.SaveChangesAsync(cancellationToken);
+        }
+        catch (DbUpdateConcurrencyException exception)
+        {
+            // Last-resort recovery for Identity ConcurrencyStamp / leftover tokens.
+            foreach (var entry in exception.Entries)
+            {
+                var databaseValues = await entry.GetDatabaseValuesAsync(cancellationToken);
+                if (databaseValues is null)
+                {
+                    entry.State = EntityState.Detached;
+                    continue;
+                }
+
+                entry.OriginalValues.SetValues(databaseValues);
+            }
+
+            return await base.SaveChangesAsync(cancellationToken);
+        }
+    }
+
     protected override void OnModelCreating(ModelBuilder builder)
     {
         base.OnModelCreating(builder);
