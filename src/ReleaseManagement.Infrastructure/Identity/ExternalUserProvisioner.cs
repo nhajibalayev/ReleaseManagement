@@ -20,6 +20,10 @@ public interface IExternalUserProvisioner
     Task<AppIdentityUser> ProvisionFromWindowsAsync(
         ClaimsPrincipal principal,
         CancellationToken cancellationToken = default);
+
+    Task<AppIdentityUser> ProvisionFromActiveDirectoryAsync(
+        ActiveDirectoryIdentity identity,
+        CancellationToken cancellationToken = default);
 }
 
 public sealed class ExternalUserProvisioner : IExternalUserProvisioner
@@ -103,6 +107,23 @@ public sealed class ExternalUserProvisioner : IExternalUserProvisioner
             userName: shortName,
             email: email,
             displayName: identityName,
+            defaultRole: _windowsAuth.DefaultRole,
+            cancellationToken);
+    }
+
+    public Task<AppIdentityUser> ProvisionFromActiveDirectoryAsync(
+        ActiveDirectoryIdentity identity,
+        CancellationToken cancellationToken = default)
+    {
+        var email = string.IsNullOrWhiteSpace(identity.Email)
+            ? $"{identity.UserName.Replace(' ', '.')}@ad.local"
+            : identity.Email;
+
+        return UpsertExternalUserAsync(
+            externalId: identity.ExternalId,
+            userName: identity.UserName,
+            email: email,
+            displayName: identity.DisplayName,
             defaultRole: _windowsAuth.DefaultRole,
             cancellationToken);
     }

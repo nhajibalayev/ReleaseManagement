@@ -18,9 +18,13 @@ public sealed class LoginViewModel
 
     public bool WindowsAuthEnabled { get; set; }
 
+    public bool ActiveDirectoryLoginEnabled { get; set; }
+
     public bool AzureAdEnabled { get; set; }
 
     public bool AllowLocalLogin { get; set; } = true;
+
+    public string? LoginHint { get; set; }
 }
 
 public sealed class DashboardViewModel

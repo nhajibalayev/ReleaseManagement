@@ -21,15 +21,19 @@ dotnet run --project src/ReleaseManagement.Web
 
 Development seed users (password `ChangeMe!123`): `admin`, `po`, `rm`, `pentest`, `infosec`, `business`, `devops`, `auditor`.
 
-## On-prem Azure DevOps Server + Windows / AD login (nh-nk)
+## On-prem Azure DevOps Server + Active Directory login (nh-nk)
 
-Typical corporate setup (on-prem collection, same AD credentials as the PC):
+Sign in with the same AD username/password you use for
+`https://devops.nh-nk.az`. The app validates against Active Directory and
+calls Azure DevOps Server REST APIs **as that user** (no PAT required).
 
 ```json
 {
   "WindowsAuth": {
     "Enabled": true,
-    "AllowLocalLogin": true,
+    "Domain": "NH-NK",
+    "EnableNegotiate": false,
+    "AllowLocalLogin": false,
     "DefaultRole": "ProductOwner"
   },
   "AzureAd": {
@@ -39,30 +43,33 @@ Typical corporate setup (on-prem collection, same AD credentials as the PC):
     "Enabled": true,
     "OrganizationUrl": "https://devops.nh-nk.az/DefaultCollection",
     "Project": "<project-name>",
-    "PersonalAccessToken": "<pat>",
     "WorkItemType": "Task",
     "ApiVersion": "7.1",
-    "UseWindowsCredentials": false,
     "RequireProjectAccessToCreate": true
   }
 }
 ```
 
-Store secrets with User Secrets (do not commit PAT):
+User Secrets example:
 
 ```powershell
 cd src/ReleaseManagement.Web
 dotnet user-secrets init
-dotnet user-secrets set "AzureDevOps:PersonalAccessToken" "<pat>"
-dotnet user-secrets set "AzureDevOps:Project" "<project-name>"
 dotnet user-secrets set "WindowsAuth:Enabled" "true"
+dotnet user-secrets set "WindowsAuth:Domain" "NH-NK"
+dotnet user-secrets set "WindowsAuth:AllowLocalLogin" "false"
 dotnet user-secrets set "AzureDevOps:Enabled" "true"
+dotnet user-secrets set "AzureDevOps:OrganizationUrl" "https://devops.nh-nk.az/DefaultCollection"
+dotnet user-secrets set "AzureDevOps:Project" "<project-name>"
 ```
 
-Notes:
-- Login page shows **Sign in with Windows / Active Directory** (Negotiate). Works best on a domain-joined Windows machine / IIS.
-- API calls to DevOps use the PAT by default (reliable for Hangfire background jobs). Set `UseWindowsCredentials: true` only if the app pool / process identity should call ADO with Windows auth instead.
-- If create-release access checks fail on older servers, try `ApiVersion` `6.0` or `5.1`.
+How it works:
+1. Login form accepts `DOMAIN\user` (or `user` + configured Domain) and AD password.
+2. Credentials are validated against Active Directory.
+3. For DevOps API / board-access checks, the app builds a Basic auth header from **your** AD credentials for that session.
+4. Create/update work-item outbox jobs capture that authorization at submit time.
+
+Optional: set `WindowsAuth:EnableNegotiate` to `true` for browser integrated Windows login (no password form; DevOps calls then need process/Windows credentials separately).
 
 ## Azure AD SSO + Azure DevOps Services (cloud, optional)
 
@@ -90,8 +97,6 @@ Entra ID app registration needs:
 - Redirect URI: `https://localhost:7171/signin-oidc` (and prod URL)
 - API permission: Azure DevOps `user_impersonation` (+ admin consent)
 - Optional Graph: `User.Read`
-
-With cloud SSO enabled, create-release can check project access via the user's OAuth token (PAT remains a fallback).
 
 See [Stage 1 Architecture](docs/ARCHITECTURE.md) for the solution design,
 workflow, entities, controllers, views, and package plan.

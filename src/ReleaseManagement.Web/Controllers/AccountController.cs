@@ -5,6 +5,7 @@ using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.Extensions.Options;
+using ReleaseManagement.Infrastructure.AzureDevOps;
 using ReleaseManagement.Infrastructure.Identity;
 using ReleaseManagement.Infrastructure.Options;
 using ReleaseManagement.Web.ViewModels;
@@ -18,6 +19,8 @@ public sealed class AccountController : Controller
     private readonly SignInManager<AppIdentityUser> _signInManager;
     private readonly UserManager<AppIdentityUser> _userManager;
     private readonly IExternalUserProvisioner _externalUserProvisioner;
+    private readonly IActiveDirectoryAuthenticator _activeDirectoryAuthenticator;
+    private readonly IAzureDevOpsUserCredentialStore _azureDevOpsCredentialStore;
     private readonly AzureAdOptions _azureAd;
     private readonly WindowsAuthOptions _windowsAuth;
 
@@ -25,12 +28,16 @@ public sealed class AccountController : Controller
         SignInManager<AppIdentityUser> signInManager,
         UserManager<AppIdentityUser> userManager,
         IExternalUserProvisioner externalUserProvisioner,
+        IActiveDirectoryAuthenticator activeDirectoryAuthenticator,
+        IAzureDevOpsUserCredentialStore azureDevOpsCredentialStore,
         IOptions<AzureAdOptions> azureAd,
         IOptions<WindowsAuthOptions> windowsAuth)
     {
         _signInManager = signInManager;
         _userManager = userManager;
         _externalUserProvisioner = externalUserProvisioner;
+        _activeDirectoryAuthenticator = activeDirectoryAuthenticator;
+        _azureDevOpsCredentialStore = azureDevOpsCredentialStore;
         _azureAd = azureAd.Value;
         _windowsAuth = windowsAuth.Value;
     }
@@ -49,15 +56,44 @@ public sealed class AccountController : Controller
     {
         ApplyLoginFlags(model);
 
-        if (!model.AllowLocalLogin)
-        {
-            ModelState.AddModelError(string.Empty, "Local login is disabled. Use Windows or Microsoft sign-in.");
-            return View(model);
-        }
-
         if (string.IsNullOrWhiteSpace(model.UserName) || string.IsNullOrWhiteSpace(model.Password))
         {
             ModelState.AddModelError(string.Empty, "Username and password are required.");
+            return View(model);
+        }
+
+        if (_windowsAuth.Enabled)
+        {
+            var adIdentity = _activeDirectoryAuthenticator.Authenticate(model.UserName, model.Password);
+            if (adIdentity is not null)
+            {
+                var adUser = await _externalUserProvisioner.ProvisionFromActiveDirectoryAsync(
+                    adIdentity,
+                    cancellationToken);
+
+                if (!adUser.IsActive)
+                {
+                    ModelState.AddModelError(string.Empty, "Your account is deactivated.");
+                    return View(model);
+                }
+
+                await _signInManager.SignInAsync(adUser, model.RememberMe);
+                _azureDevOpsCredentialStore.Save(
+                    new AzureDevOpsUserCredential(adIdentity.DomainQualifiedName, model.Password));
+
+                return RedirectAfterLogin(model.ReturnUrl);
+            }
+
+            if (!_windowsAuth.AllowLocalLogin)
+            {
+                ModelState.AddModelError(string.Empty, "Invalid Active Directory username or password.");
+                return View(model);
+            }
+        }
+
+        if (!model.AllowLocalLogin)
+        {
+            ModelState.AddModelError(string.Empty, "Local login is disabled.");
             return View(model);
         }
 
@@ -89,7 +125,7 @@ public sealed class AccountController : Controller
         string? returnUrl = null,
         CancellationToken cancellationToken = default)
     {
-        if (!_windowsAuth.Enabled)
+        if (!_windowsAuth.Enabled || !_windowsAuth.EnableNegotiate)
         {
             return RedirectToAction(nameof(Login));
         }
@@ -206,6 +242,7 @@ public sealed class AccountController : Controller
     [Authorize]
     public async Task<IActionResult> Logout()
     {
+        _azureDevOpsCredentialStore.Clear();
         await _signInManager.SignOutAsync();
         if (_azureAd.Enabled)
         {
@@ -237,7 +274,8 @@ public sealed class AccountController : Controller
 
     private void ApplyLoginFlags(LoginViewModel model)
     {
-        model.WindowsAuthEnabled = _windowsAuth.Enabled;
+        model.WindowsAuthEnabled = _windowsAuth.Enabled && _windowsAuth.EnableNegotiate;
+        model.ActiveDirectoryLoginEnabled = _windowsAuth.Enabled;
         model.AzureAdEnabled = _azureAd.Enabled;
 
         var allowLocal = true;
@@ -251,7 +289,11 @@ public sealed class AccountController : Controller
             allowLocal = allowLocal && _azureAd.AllowLocalLogin;
         }
 
-        model.AllowLocalLogin = allowLocal;
+        // When AD form login is on, the same username/password fields are used for AD.
+        model.AllowLocalLogin = allowLocal || _windowsAuth.Enabled;
+        model.LoginHint = _windowsAuth.Enabled
+            ? "Use your Active Directory username and password (same as Azure DevOps)."
+            : null;
     }
 
     private IActionResult RedirectAfterLogin(string? returnUrl)

@@ -5,15 +5,26 @@ public sealed class WindowsAuthOptions
     public const string SectionName = "WindowsAuth";
 
     /// <summary>
-    /// When true, Active Directory / Windows (Negotiate) login is offered.
-    /// Typical for on-prem Azure DevOps Server environments.
+    /// When true, users sign in with Active Directory username/password.
+    /// Those credentials are used dynamically for Azure DevOps Server API calls.
     /// </summary>
     public bool Enabled { get; set; }
 
-    /// <summary>Keep username/password login available alongside Windows auth.</summary>
+    /// <summary>
+    /// Optional AD domain (e.g. NH-NK). If empty, the machine's domain is used.
+    /// Users may still type DOMAIN\user or user@domain.
+    /// </summary>
+    public string Domain { get; set; } = string.Empty;
+
+    /// <summary>
+    /// When true, also offer browser Negotiate (integrated Windows) login.
+    /// </summary>
+    public bool EnableNegotiate { get; set; }
+
+    /// <summary>Keep local Identity seed accounts available (dev only).</summary>
     public bool AllowLocalLogin { get; set; } = true;
 
-    /// <summary>Default app role for newly provisioned Windows/AD users.</summary>
+    /// <summary>Default app role for newly provisioned AD users.</summary>
     public string DefaultRole { get; set; } = "ProductOwner";
 }
 
@@ -57,8 +68,7 @@ public sealed class AzureDevOpsOptions
     public string Project { get; set; } = string.Empty;
 
     /// <summary>
-    /// PAT from Azure DevOps Server / Services.
-    /// Primary auth for on-prem API calls and Hangfire background jobs.
+    /// Optional fallback only. Preferred path is the signed-in user's AD credentials.
     /// </summary>
     public string PersonalAccessToken { get; set; } = string.Empty;
 
@@ -70,7 +80,7 @@ public sealed class AzureDevOpsOptions
     public string ApiVersion { get; set; } = "7.1";
 
     /// <summary>
-    /// When true, HttpClient sends Windows credentials (useful with Negotiate/IIS impersonation).
+    /// When true, HttpClient sends Windows credentials (Negotiate path / process identity).
     /// </summary>
     public bool UseWindowsCredentials { get; set; }
 
@@ -82,7 +92,7 @@ public sealed class AzureDevOpsOptions
 
     /// <summary>
     /// When true, create-release verifies the configured ADO project is reachable
-    /// with the current credentials (user OAuth, Windows impersonation, or PAT).
+    /// with the signed-in user's credentials.
     /// </summary>
     public bool RequireProjectAccessToCreate { get; set; } = true;
 }

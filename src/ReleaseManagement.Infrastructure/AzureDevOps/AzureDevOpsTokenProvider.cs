@@ -10,17 +10,20 @@ namespace ReleaseManagement.Infrastructure.AzureDevOps;
 public sealed class AzureDevOpsTokenProvider : IAzureDevOpsTokenProvider
 {
     private readonly IServiceProvider _serviceProvider;
+    private readonly IAzureDevOpsUserCredentialStore _credentialStore;
     private readonly AzureDevOpsOptions _options;
     private readonly AzureAdOptions _azureAd;
     private readonly ILogger<AzureDevOpsTokenProvider> _logger;
 
     public AzureDevOpsTokenProvider(
         IServiceProvider serviceProvider,
+        IAzureDevOpsUserCredentialStore credentialStore,
         IOptions<AzureDevOpsOptions> options,
         IOptions<AzureAdOptions> azureAd,
         ILogger<AzureDevOpsTokenProvider> logger)
     {
         _serviceProvider = serviceProvider;
+        _credentialStore = credentialStore;
         _options = options.Value;
         _azureAd = azureAd.Value;
         _logger = logger;
@@ -28,6 +31,13 @@ public sealed class AzureDevOpsTokenProvider : IAzureDevOpsTokenProvider
 
     public async Task<string?> GetAccessTokenAsync(CancellationToken cancellationToken = default)
     {
+        // Prefer the signed-in AD user's credentials (Basic for on-prem DevOps Server).
+        var credential = _credentialStore.Get();
+        if (credential is not null)
+        {
+            return credential.ToAuthorizationValue();
+        }
+
         if (_azureAd.Enabled)
         {
             var tokenAcquisition = _serviceProvider.GetService<ITokenAcquisition>();
@@ -35,8 +45,12 @@ public sealed class AzureDevOpsTokenProvider : IAzureDevOpsTokenProvider
             {
                 try
                 {
-                    return await tokenAcquisition.GetAccessTokenForUserAsync(
+                    var bearer = await tokenAcquisition.GetAccessTokenForUserAsync(
                         [_options.OAuthScope]);
+                    if (!string.IsNullOrWhiteSpace(bearer))
+                    {
+                        return $"Bearer {bearer}";
+                    }
                 }
                 catch (Exception exception)
                 {

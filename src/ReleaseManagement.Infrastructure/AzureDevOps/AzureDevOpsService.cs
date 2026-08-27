@@ -198,22 +198,13 @@ public sealed class AzureDevOpsService : IAzureDevOpsService
             token = await _tokenProvider.GetAccessTokenAsync(cancellationToken);
         }
 
-        if (!string.IsNullOrWhiteSpace(token))
+        if (AzureDevOpsAuthorization.TryApply(request, token, _options))
         {
-            request.Headers.Authorization = new AuthenticationHeaderValue("Bearer", token);
-            return;
-        }
-
-        if (!string.IsNullOrWhiteSpace(_options.PersonalAccessToken))
-        {
-            var basic = Convert.ToBase64String(
-                Encoding.ASCII.GetBytes($":{_options.PersonalAccessToken}"));
-            request.Headers.Authorization = new AuthenticationHeaderValue("Basic", basic);
             return;
         }
 
         throw new InvalidOperationException(
-            "No Azure DevOps credentials available. Sign in with SSO or configure a PAT.");
+            "No Azure DevOps credentials available. Sign in with Active Directory.");
     }
 
     private void EnsureConfigured()

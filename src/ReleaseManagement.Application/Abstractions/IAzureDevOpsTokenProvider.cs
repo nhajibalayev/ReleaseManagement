@@ -1,8 +1,9 @@
 namespace ReleaseManagement.Application.Abstractions;
 
 /// <summary>
-/// Resolves an Azure DevOps access token for the current caller.
-/// Prefer the signed-in user's OAuth token; fall back to configured PAT when allowed.
+/// Resolves Azure DevOps authorization for the current caller.
+/// Returns a full Authorization header value such as "Basic …" or "Bearer …".
+/// Prefers the signed-in AD user's credentials; then Entra OAuth when enabled.
 /// </summary>
 public interface IAzureDevOpsTokenProvider
 {

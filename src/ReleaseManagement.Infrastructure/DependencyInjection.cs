@@ -84,7 +84,7 @@ public static class DependencyInjection
             options.Cookie.SecurePolicy = Microsoft.AspNetCore.Http.CookieSecurePolicy.SameAsRequest;
         });
 
-        if (windowsAuth.Enabled)
+        if (windowsAuth.Enabled && windowsAuth.EnableNegotiate)
         {
             services.AddAuthentication()
                 .AddNegotiate();
@@ -115,6 +115,14 @@ public static class DependencyInjection
         }
 
         services.AddHttpContextAccessor();
+        services.AddDistributedMemoryCache();
+        services.AddSession(options =>
+        {
+            options.Cookie.Name = ".ReleaseManagement.Session";
+            options.Cookie.HttpOnly = true;
+            options.Cookie.IsEssential = true;
+            options.IdleTimeout = TimeSpan.FromHours(8);
+        });
         services.AddScoped<ICurrentUserService, CurrentUserService>();
         services.AddSingleton<IClock, SystemClock>();
         services.AddScoped<IReleaseNumberGenerator, ReleaseNumberGenerator>();
@@ -124,6 +132,8 @@ public static class DependencyInjection
         services.AddScoped<IEmailSender, LoggingEmailSender>();
         services.AddScoped<INotificationService, NotificationService>();
         services.AddScoped<IExternalUserProvisioner, ExternalUserProvisioner>();
+        services.AddScoped<IActiveDirectoryAuthenticator, ActiveDirectoryAuthenticator>();
+        services.AddScoped<IAzureDevOpsUserCredentialStore, SessionAzureDevOpsUserCredentialStore>();
         services.AddScoped<IAzureDevOpsTokenProvider, AzureDevOpsTokenProvider>();
         services.AddScoped<DevelopmentDataSeeder>();
         services.AddTransient<OutboxProcessorJob>();

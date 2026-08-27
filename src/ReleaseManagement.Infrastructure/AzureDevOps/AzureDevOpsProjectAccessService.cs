@@ -51,21 +51,13 @@ public sealed class AzureDevOpsProjectAccessService : IAzureDevOpsProjectAccessS
         using var request = new HttpRequestMessage(HttpMethod.Get, url);
         request.Headers.Accept.Add(new MediaTypeWithQualityHeaderValue("application/json"));
 
-        var oauthToken = await _tokenProvider.GetAccessTokenAsync(cancellationToken);
-        if (!string.IsNullOrWhiteSpace(oauthToken))
-        {
-            request.Headers.Authorization = new AuthenticationHeaderValue("Bearer", oauthToken);
-        }
-        else if (!string.IsNullOrWhiteSpace(_options.PersonalAccessToken))
-        {
-            var basic = Convert.ToBase64String(
-                Encoding.ASCII.GetBytes($":{_options.PersonalAccessToken}"));
-            request.Headers.Authorization = new AuthenticationHeaderValue("Basic", basic);
-        }
-        else if (!_options.UseWindowsCredentials)
+        if (!AzureDevOpsAuthorization.TryApply(
+                request,
+                await _tokenProvider.GetAccessTokenAsync(cancellationToken),
+                _options))
         {
             throw new ForbiddenException(
-                "Azure DevOps credentials are not configured. Provide a PAT or enable Windows credentials.");
+                "Sign in with Active Directory so Azure DevOps can authorize your board access.");
         }
 
         using var response = await _httpClient.SendAsync(request, cancellationToken);

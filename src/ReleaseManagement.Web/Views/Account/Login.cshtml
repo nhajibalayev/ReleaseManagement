@@ -23,10 +23,10 @@
 
         @if (Model.WindowsAuthEnabled)
         {
-            <a class="btn btn-accent w-100 mb-3"
+            <a class="btn btn-outline-secondary w-100 mb-3"
                asp-action="WindowsLogin"
                asp-route-returnUrl="@Model.ReturnUrl">
-                Sign in with Windows / Active Directory
+                Sign in with Windows (integrated)
             </a>
         }
 
@@ -39,9 +39,13 @@
             </a>
         }
 
-        @if (Model.AllowLocalLogin)
+        @if (Model.AllowLocalLogin || Model.ActiveDirectoryLoginEnabled)
         {
-            @if (Model.WindowsAuthEnabled || Model.AzureAdEnabled)
+            @if (!string.IsNullOrWhiteSpace(Model.LoginHint))
+            {
+                <div class="alert alert-info small">@Model.LoginHint</div>
+            }
+            else if (Model.WindowsAuthEnabled || Model.AzureAdEnabled)
             {
                 <div class="text-center text-muted small mb-3">or use a local account</div>
             }
@@ -49,8 +53,11 @@
                 <div asp-validation-summary="ModelOnly" class="alert alert-danger" role="alert"></div>
                 <input asp-for="ReturnUrl" type="hidden" />
                 <div class="mb-3">
-                    <label asp-for="UserName" class="form-label"></label>
-                    <input asp-for="UserName" class="form-control" autocomplete="username" autofocus />
+                    <label asp-for="UserName" class="form-label">
+                        @(Model.ActiveDirectoryLoginEnabled ? "AD user name" : "User name")
+                    </label>
+                    <input asp-for="UserName" class="form-control" autocomplete="username" autofocus
+                           placeholder="@(Model.ActiveDirectoryLoginEnabled ? @"DOMAIN\user or user" : null)" />
                     <span asp-validation-for="UserName" class="text-danger small"></span>
                 </div>
                 <div class="mb-3">
@@ -62,7 +69,9 @@
                     <input asp-for="RememberMe" class="form-check-input" />
                     <label asp-for="RememberMe" class="form-check-label"></label>
                 </div>
-                <button type="submit" class="btn btn-outline-secondary w-100">Sign in</button>
+                <button type="submit" class="btn btn-accent w-100">
+                    @(Model.ActiveDirectoryLoginEnabled ? "Sign in with Active Directory" : "Sign in")
+                </button>
             </form>
         }
     </div>
