@@ -1,5 +1,6 @@
 using Hangfire;
 using ReleaseManagement.Infrastructure;
+using ReleaseManagement.Infrastructure.Jobs;
 using ReleaseManagement.Infrastructure.Persistence;
 using Serilog;
 
@@ -62,6 +63,17 @@ try
 
     if (!demoMode)
     {
+        try
+        {
+            using var scope = app.Services.CreateScope();
+            var lockCleaner = scope.ServiceProvider.GetRequiredService<HangfireStartupLockCleaner>();
+            await lockCleaner.ClearStaleLocksAsync();
+        }
+        catch (Exception lockException)
+        {
+            Log.Warning(lockException, "Failed to clear stale Hangfire locks.");
+        }
+
         app.UseHangfireDashboard("/hangfire", new DashboardOptions
         {
             Authorization = [new Hangfire.Dashboard.LocalRequestsOnlyAuthorizationFilter()]

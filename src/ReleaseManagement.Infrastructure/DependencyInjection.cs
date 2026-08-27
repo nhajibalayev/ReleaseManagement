@@ -158,10 +158,21 @@ public static class DependencyInjection
                 .SetDataCompatibilityLevel(CompatibilityLevel.Version_180)
                 .UseSimpleAssemblyNameTypeSerializer()
                 .UseRecommendedSerializerSettings()
-                .UsePostgreSqlStorage(options =>
-                    options.UseNpgsqlConnection(connectionString!)));
+                .UsePostgreSqlStorage(
+                    options => options.UseNpgsqlConnection(connectionString!),
+                    new PostgreSqlStorageOptions
+                    {
+                        // Stale locks from killed debug sessions expire faster.
+                        DistributedLockTimeout = TimeSpan.FromSeconds(30),
+                        PrepareSchemaIfNecessary = true
+                    }));
 
-            services.AddHangfireServer();
+            services.AddHangfireServer(options =>
+            {
+                options.ShutdownTimeout = TimeSpan.FromSeconds(15);
+            });
+
+            services.AddSingleton<HangfireStartupLockCleaner>();
         }
 
         var healthChecks = services.AddHealthChecks()
