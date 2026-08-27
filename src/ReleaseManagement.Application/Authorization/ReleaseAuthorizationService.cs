@@ -50,31 +50,9 @@ public sealed class ReleaseAuthorizationService : IReleaseAuthorizationService
     {
         EnsureAuthenticated();
 
-        if (IsPrivilegedViewerOrAdmin())
-        {
-            await _azureDevOpsProjectAccess.EnsureCurrentUserCanAccessProjectAsync(cancellationToken);
-            return;
-        }
-
-        if (!_currentUser.IsInRole(RoleNames.ProductOwner))
-        {
-            throw new ForbiddenException("Only Product Owners can create release requests.");
-        }
-
-        var hasAccess = await _dbContext.UserProductAccesses
-            .AsNoTracking()
-            .AnyAsync(
-                access => access.UserId == _currentUser.UserId &&
-                          access.ProductId == productId &&
-                          access.AccessType >= ProductAccessType.CreateRelease,
-                cancellationToken);
-
-        if (!hasAccess)
-        {
-            throw new ForbiddenException(
-                $"You are not allowed to create releases for product '{productId}'.");
-        }
-
+        // Open create: any signed-in user may create a release for any active product.
+        // Azure DevOps project access is still checked when integration is enforced.
+        _ = productId;
         await _azureDevOpsProjectAccess.EnsureCurrentUserCanAccessProjectAsync(cancellationToken);
     }
 

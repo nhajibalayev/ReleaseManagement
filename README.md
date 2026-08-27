@@ -45,10 +45,15 @@ calls Azure DevOps Server REST APIs **as that user** (no PAT required).
     "Project": "<project-name>",
     "WorkItemType": "Task",
     "ApiVersion": "7.1",
+    "AreaPath": "",
+    "IterationPath": "",
     "RequireProjectAccessToCreate": true
   }
 }
 ```
+
+`AreaPath` / `IterationPath` — чтобы work item попал на нужный team/release board.
+В DevOps открой карточку на борде → смотри Area / Iteration (например `MyProject\\Release Team`).
 
 User Secrets example:
 

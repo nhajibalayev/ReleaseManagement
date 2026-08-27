@@ -80,6 +80,17 @@ public sealed class AzureDevOpsOptions
     public string ApiVersion { get; set; } = "7.1";
 
     /// <summary>
+    /// Optional Area Path so the work item appears on the team/release board
+    /// (e.g. "MyProject\\Release Team").
+    /// </summary>
+    public string AreaPath { get; set; } = string.Empty;
+
+    /// <summary>
+    /// Optional Iteration Path (e.g. "MyProject\\Release\\Sprint 1").
+    /// </summary>
+    public string IterationPath { get; set; } = string.Empty;
+
+    /// <summary>
     /// When true, HttpClient sends Windows credentials (Negotiate path / process identity).
     /// </summary>
     public bool UseWindowsCredentials { get; set; }

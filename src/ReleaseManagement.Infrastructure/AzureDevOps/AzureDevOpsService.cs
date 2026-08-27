@@ -35,19 +35,39 @@ public sealed class AzureDevOpsService : IAzureDevOpsService
     {
         EnsureConfigured();
 
-        var document = new object[]
+        var operations = new List<object>
         {
             new { op = "add", path = "/fields/System.Title", value = $"{release.ReleaseNumber}: {release.Title}" },
             new { op = "add", path = "/fields/System.Description", value = release.Description },
             new { op = "add", path = "/fields/System.Tags", value = $"ReleaseManagement;{release.ReleaseNumber}" }
         };
 
+        if (!string.IsNullOrWhiteSpace(_options.AreaPath))
+        {
+            operations.Add(new
+            {
+                op = "add",
+                path = "/fields/System.AreaPath",
+                value = _options.AreaPath
+            });
+        }
+
+        if (!string.IsNullOrWhiteSpace(_options.IterationPath))
+        {
+            operations.Add(new
+            {
+                op = "add",
+                path = "/fields/System.IterationPath",
+                value = _options.IterationPath
+            });
+        }
+
         using var request = new HttpRequestMessage(
             HttpMethod.Post,
             $"{_options.OrganizationUrl.TrimEnd('/')}/{_options.Project}/_apis/wit/workitems/${_options.WorkItemType}?api-version={_options.ApiVersion}")
         {
             Content = new StringContent(
-                JsonSerializer.Serialize(document),
+                JsonSerializer.Serialize(operations),
                 Encoding.UTF8,
                 "application/json-patch+json")
         };

@@ -176,7 +176,7 @@ public static class DependencyInjection
         {
             options.AddPolicy(
                 AuthorizationPolicies.CanCreateRelease,
-                policy => policy.RequireRole(RoleNames.ProductOwner, RoleNames.Administrator));
+                policy => policy.RequireAuthenticatedUser());
             options.AddPolicy(
                 AuthorizationPolicies.CanReviewRelease,
                 policy => policy.RequireRole(RoleNames.ReleaseManager, RoleNames.Administrator));
