@@ -103,7 +103,11 @@ public sealed class Release : AuditableEntity
 
     public string? AzureDevOpsWorkItemUrl { get; private set; }
 
-    public uint RowVersion { get; private set; }
+    /// <summary>
+    /// PostgreSQL system column used as optimistic concurrency token.
+    /// Public setter required so EF can refresh the value after SaveChanges.
+    /// </summary>
+    public uint RowVersion { get; set; }
 
     public IReadOnlyCollection<ReleaseService> Services => _services.AsReadOnly();
 

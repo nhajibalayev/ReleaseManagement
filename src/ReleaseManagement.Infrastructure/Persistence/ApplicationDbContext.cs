@@ -55,6 +55,10 @@ public sealed class ApplicationDbContext
 
     public DbSet<UserRole> AppUserRoles => Set<UserRole>();
 
+    public Task ReloadAsync<TEntity>(TEntity entity, CancellationToken cancellationToken = default)
+        where TEntity : class
+        => Entry(entity).ReloadAsync(cancellationToken);
+
     protected override void OnModelCreating(ModelBuilder builder)
     {
         base.OnModelCreating(builder);

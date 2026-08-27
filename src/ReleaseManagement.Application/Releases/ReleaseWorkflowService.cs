@@ -206,6 +206,10 @@ public sealed class ReleaseWorkflowService : IReleaseWorkflowService
         var submitted = await _dbContext.Releases
             .SingleAsync(item => item.Id == releaseId, cancellationToken);
 
+        // First SaveChanges already bumped PostgreSQL xmin; reload concurrency token
+        // before the automatic follow-up transition to avoid DbUpdateConcurrencyException.
+        await _dbContext.ReloadAsync(submitted, cancellationToken);
+
         if (submitted.CurrentStatus == ReleaseStatus.Submitted &&
             CanTransition(
                 ReleaseStatus.Submitted,

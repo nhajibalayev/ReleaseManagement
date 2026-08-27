@@ -152,12 +152,6 @@ public sealed class ReleaseAuthorizationService : IReleaseAuthorizationService
         return allowed.Count > 0;
     }
 
-    private bool IsPrivilegedViewerOrAdmin()
-    {
-        return _currentUser.IsInRole(RoleNames.Administrator) ||
-               _currentUser.IsInRole(RoleNames.ReleaseManager);
-    }
-
     private void EnsureAuthenticated()
     {
         if (!_currentUser.IsAuthenticated || _currentUser.UserId == Guid.Empty)

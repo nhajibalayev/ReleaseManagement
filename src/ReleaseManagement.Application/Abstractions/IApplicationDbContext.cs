@@ -37,5 +37,8 @@ public interface IApplicationDbContext
 
     DbSet<AzureDevOpsMapping> AzureDevOpsMappings { get; }
 
+    Task ReloadAsync<TEntity>(TEntity entity, CancellationToken cancellationToken = default)
+        where TEntity : class;
+
     Task<int> SaveChangesAsync(CancellationToken cancellationToken = default);
 }
