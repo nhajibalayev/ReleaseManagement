@@ -1,5 +1,6 @@
 using Microsoft.AspNetCore.Identity.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Logging;
 using ReleaseManagement.Application.Abstractions;
 using ReleaseManagement.Domain.Entities;
 using ReleaseManagement.Infrastructure.Identity;
@@ -10,9 +11,14 @@ public sealed class ApplicationDbContext
     : IdentityDbContext<AppIdentityUser, Microsoft.AspNetCore.Identity.IdentityRole<Guid>, Guid>,
       IApplicationDbContext
 {
-    public ApplicationDbContext(DbContextOptions<ApplicationDbContext> options)
+    private readonly ILogger<ApplicationDbContext>? _logger;
+
+    public ApplicationDbContext(
+        DbContextOptions<ApplicationDbContext> options,
+        ILogger<ApplicationDbContext>? logger = null)
         : base(options)
     {
+        _logger = logger;
     }
 
     public DbSet<Release> Releases => Set<Release>();
@@ -61,33 +67,56 @@ public sealed class ApplicationDbContext
 
     public override async Task<int> SaveChangesAsync(CancellationToken cancellationToken = default)
     {
-        try
+        const int maxAttempts = 3;
+
+        for (var attempt = 1; attempt <= maxAttempts; attempt++)
         {
-            return await base.SaveChangesAsync(cancellationToken);
-        }
-        catch (DbUpdateConcurrencyException exception)
-        {
-            // Last-resort recovery for Identity ConcurrencyStamp / leftover tokens.
-            foreach (var entry in exception.Entries)
+            try
             {
-                var databaseValues = await entry.GetDatabaseValuesAsync(cancellationToken);
-                if (databaseValues is null)
-                {
-                    entry.State = EntityState.Detached;
-                    continue;
-                }
-
-                entry.OriginalValues.SetValues(databaseValues);
+                return await base.SaveChangesAsync(cancellationToken);
             }
+            catch (DbUpdateConcurrencyException exception) when (attempt < maxAttempts)
+            {
+                _logger?.LogWarning(
+                    exception,
+                    "Concurrency conflict on save (attempt {Attempt}/{MaxAttempts}). Retrying with client-wins merge.",
+                    attempt,
+                    maxAttempts);
 
-            return await base.SaveChangesAsync(cancellationToken);
+                foreach (var entry in exception.Entries)
+                {
+                    _logger?.LogWarning(
+                        "Concurrency conflict entity: {Entity} key={Key}",
+                        entry.Metadata.Name,
+                        entry.Properties.FirstOrDefault(p => p.Metadata.IsPrimaryKey())?.CurrentValue);
+
+                    var databaseValues = await entry.GetDatabaseValuesAsync(cancellationToken);
+                    if (databaseValues is null)
+                    {
+                        entry.State = EntityState.Detached;
+                        continue;
+                    }
+
+                    var clientValues = entry.CurrentValues.ToObject();
+                    entry.OriginalValues.SetValues(databaseValues);
+                    if (clientValues is not null)
+                    {
+                        entry.CurrentValues.SetValues(clientValues);
+                    }
+                }
+            }
         }
+
+        return await base.SaveChangesAsync(cancellationToken);
     }
 
     protected override void OnModelCreating(ModelBuilder builder)
     {
         base.OnModelCreating(builder);
         builder.ApplyConfigurationsFromAssembly(typeof(ApplicationDbContext).Assembly);
+
+        // Belt-and-suspenders: never treat PostgreSQL xmin as a concurrency token.
+        builder.Entity<Release>().Ignore(release => release.RowVersion);
 
         builder.HasSequence<long>("release_number_seq")
             .StartsAt(1)

@@ -113,7 +113,7 @@ public sealed class ReleasesController : Controller
 
             return RedirectToAction(nameof(Details), new { id });
         }
-        catch (Exception exception) when (exception is BusinessRuleException or ForbiddenException or FluentValidation.ValidationException)
+        catch (Exception exception) when (exception is BusinessRuleException or ForbiddenException or FluentValidation.ValidationException or Microsoft.EntityFrameworkCore.DbUpdateConcurrencyException)
         {
             ModelState.AddModelError(string.Empty, exception.Message);
             return View(model);
@@ -200,7 +200,7 @@ public sealed class ReleasesController : Controller
 
             return RedirectToAction(nameof(Details), new { id = model.ReleaseId });
         }
-        catch (Exception exception) when (exception is BusinessRuleException or ForbiddenException or FluentValidation.ValidationException or ConflictException)
+        catch (Exception exception) when (exception is BusinessRuleException or ForbiddenException or FluentValidation.ValidationException or ConflictException or Microsoft.EntityFrameworkCore.DbUpdateConcurrencyException)
         {
             ModelState.AddModelError(string.Empty, exception.Message);
             return View(model);

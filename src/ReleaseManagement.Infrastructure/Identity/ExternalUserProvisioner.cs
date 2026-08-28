@@ -211,13 +211,13 @@ public sealed class ExternalUserProvisioner : IExternalUserProvisioner
                 now);
             applicationUser.SetExternalIdentity(externalId, now);
             _dbContext.ApplicationUsers.Add(applicationUser);
-            await _dbContext.SaveChangesAsync(cancellationToken);
         }
         else if (string.IsNullOrWhiteSpace(applicationUser.ExternalId))
         {
             applicationUser.SetExternalIdentity(externalId, now);
-            await _dbContext.SaveChangesAsync(cancellationToken);
         }
+
+        await _dbContext.SaveChangesAsync(cancellationToken);
 
         return existing;
     }
