@@ -1,17 +1,8 @@
-using System.Text;
 using System.Text.Json;
 using Microsoft.AspNetCore.DataProtection;
 using Microsoft.AspNetCore.Http;
 
 namespace ReleaseManagement.Infrastructure.AzureDevOps;
-
-public sealed record AzureDevOpsUserCredential(string UserName, string Password)
-{
-    public string ToBasicParameter() =>
-        Convert.ToBase64String(Encoding.UTF8.GetBytes($"{UserName}:{Password}"));
-
-    public string ToAuthorizationValue() => $"Basic {ToBasicParameter()}";
-}
 
 public interface IAzureDevOpsUserCredentialStore
 {

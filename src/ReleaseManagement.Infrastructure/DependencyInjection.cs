@@ -5,6 +5,7 @@ using Microsoft.AspNetCore.Identity;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Options;
 using Microsoft.Identity.Web;
 using ReleaseManagement.Application;
 using ReleaseManagement.Application.Abstractions;
@@ -147,13 +148,17 @@ public static class DependencyInjection
             {
                 AzureDevOpsHttpClientConfigurator.Configure(client, azureDevOps);
             })
-            .ConfigurePrimaryHttpMessageHandler(() =>
-                AzureDevOpsHttpClientConfigurator.CreateHandler(azureDevOps))
+            .ConfigurePrimaryHttpMessageHandler(provider =>
+                new AzureDevOpsAuthHandler(
+                    provider.GetRequiredService<IAzureDevOpsUserCredentialStore>(),
+                    provider.GetRequiredService<IOptions<AzureDevOpsOptions>>()))
             .AddStandardResilienceHandler();
 
         services.AddHttpClient<IAzureDevOpsProjectAccessService, AzureDevOpsProjectAccessService>()
-            .ConfigurePrimaryHttpMessageHandler(() =>
-                AzureDevOpsHttpClientConfigurator.CreateHandler(azureDevOps))
+            .ConfigurePrimaryHttpMessageHandler(provider =>
+                new AzureDevOpsAuthHandler(
+                    provider.GetRequiredService<IAzureDevOpsUserCredentialStore>(),
+                    provider.GetRequiredService<IOptions<AzureDevOpsOptions>>()))
             .AddStandardResilienceHandler();
 
         if (!demoMode && hangfireEnabled)

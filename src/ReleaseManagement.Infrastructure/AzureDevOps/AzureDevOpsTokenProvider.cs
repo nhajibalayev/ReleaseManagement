@@ -31,11 +31,11 @@ public sealed class AzureDevOpsTokenProvider : IAzureDevOpsTokenProvider
 
     public async Task<string?> GetAccessTokenAsync(CancellationToken cancellationToken = default)
     {
-        // Prefer the signed-in AD user's credentials (Basic for on-prem DevOps Server).
-        var credential = _credentialStore.Get();
-        if (credential is not null)
+        // On-prem AD credentials are applied via NTLM in AzureDevOpsAuthHandler.
+        // Do not return Basic(user:password) — Azure DevOps Server IIS returns 401 for that.
+        if (_credentialStore.Get() is not null)
         {
-            return credential.ToAuthorizationValue();
+            return null;
         }
 
         if (_azureAd.Enabled)

@@ -14,17 +14,20 @@ public sealed class AzureDevOpsService : IAzureDevOpsService
     private readonly HttpClient _httpClient;
     private readonly AzureDevOpsOptions _options;
     private readonly IAzureDevOpsTokenProvider _tokenProvider;
+    private readonly IAzureDevOpsUserCredentialStore _credentialStore;
     private readonly ILogger<AzureDevOpsService> _logger;
 
     public AzureDevOpsService(
         HttpClient httpClient,
         IOptions<AzureDevOpsOptions> options,
         IAzureDevOpsTokenProvider tokenProvider,
+        IAzureDevOpsUserCredentialStore credentialStore,
         ILogger<AzureDevOpsService> logger)
     {
         _httpClient = httpClient;
         _options = options.Value;
         _tokenProvider = tokenProvider;
+        _credentialStore = credentialStore;
         _logger = logger;
     }
 
@@ -218,7 +221,7 @@ public sealed class AzureDevOpsService : IAzureDevOpsService
             token = await _tokenProvider.GetAccessTokenAsync(cancellationToken);
         }
 
-        if (AzureDevOpsAuthorization.TryApply(request, token, _options))
+        if (AzureDevOpsAuthorization.TryApply(request, token, _options, _credentialStore))
         {
             return;
         }
@@ -253,14 +256,5 @@ public static class AzureDevOpsHttpClientConfigurator
 
         client.DefaultRequestHeaders.Accept.Add(
             new MediaTypeWithQualityHeaderValue("application/json"));
-    }
-
-    public static HttpMessageHandler CreateHandler(AzureDevOpsOptions options)
-    {
-        return new HttpClientHandler
-        {
-            UseDefaultCredentials = options.UseWindowsCredentials,
-            PreAuthenticate = options.UseWindowsCredentials
-        };
     }
 }

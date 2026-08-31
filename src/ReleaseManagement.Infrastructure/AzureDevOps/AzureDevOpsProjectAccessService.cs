@@ -13,17 +13,20 @@ public sealed class AzureDevOpsProjectAccessService : IAzureDevOpsProjectAccessS
     private readonly HttpClient _httpClient;
     private readonly AzureDevOpsOptions _options;
     private readonly IAzureDevOpsTokenProvider _tokenProvider;
+    private readonly IAzureDevOpsUserCredentialStore _credentialStore;
     private readonly ILogger<AzureDevOpsProjectAccessService> _logger;
 
     public AzureDevOpsProjectAccessService(
         HttpClient httpClient,
         IOptions<AzureDevOpsOptions> options,
         IAzureDevOpsTokenProvider tokenProvider,
+        IAzureDevOpsUserCredentialStore credentialStore,
         ILogger<AzureDevOpsProjectAccessService> logger)
     {
         _httpClient = httpClient;
         _options = options.Value;
         _tokenProvider = tokenProvider;
+        _credentialStore = credentialStore;
         _logger = logger;
     }
 
@@ -54,7 +57,8 @@ public sealed class AzureDevOpsProjectAccessService : IAzureDevOpsProjectAccessS
         if (!AzureDevOpsAuthorization.TryApply(
                 request,
                 await _tokenProvider.GetAccessTokenAsync(cancellationToken),
-                _options))
+                _options,
+                _credentialStore))
         {
             throw new ForbiddenException(
                 "Sign in with Active Directory so Azure DevOps can authorize your board access.");
@@ -66,10 +70,12 @@ public sealed class AzureDevOpsProjectAccessService : IAzureDevOpsProjectAccessS
             return;
         }
 
+        var body = await response.Content.ReadAsStringAsync(cancellationToken);
         _logger.LogWarning(
-            "Azure DevOps project access denied. Status={StatusCode}, Project={Project}",
+            "Azure DevOps project access denied. Status={StatusCode}, Project={Project}, Body={Body}",
             (int)response.StatusCode,
-            _options.Project);
+            _options.Project,
+            body);
 
         throw new ForbiddenException(
             $"You do not have access to Azure DevOps project '{_options.Project}'. " +
