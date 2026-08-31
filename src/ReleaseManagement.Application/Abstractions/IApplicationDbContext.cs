@@ -40,5 +40,8 @@ public interface IApplicationDbContext
     Task ReloadAsync<TEntity>(TEntity entity, CancellationToken cancellationToken = default)
         where TEntity : class;
 
+    void Detach<TEntity>(TEntity entity)
+        where TEntity : class;
+
     Task<int> SaveChangesAsync(CancellationToken cancellationToken = default);
 }

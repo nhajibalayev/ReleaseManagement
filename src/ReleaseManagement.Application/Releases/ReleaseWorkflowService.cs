@@ -86,6 +86,7 @@ public sealed class ReleaseWorkflowService : IReleaseWorkflowService
 
         var release = await _dbContext.Releases
             .Include(item => item.Approvals)
+            .Include(item => item.StatusHistory)
             .SingleOrDefaultAsync(item => item.Id == request.ReleaseId, cancellationToken);
 
         if (release is null)
@@ -173,9 +174,32 @@ public sealed class ReleaseWorkflowService : IReleaseWorkflowService
     {
         await _authorization.EnsureCanEditAsync(releaseId, cancellationToken);
 
+        // Create+Submit shares one DbContext; detach tracked graph so Include loads cleanly.
+        var tracked = _dbContext.Releases.Local.FirstOrDefault(item => item.Id == releaseId);
+        if (tracked is not null)
+        {
+            foreach (var service in tracked.Services.ToArray())
+            {
+                _dbContext.Detach(service);
+            }
+
+            foreach (var approval in tracked.Approvals.ToArray())
+            {
+                _dbContext.Detach(approval);
+            }
+
+            foreach (var history in tracked.StatusHistory.ToArray())
+            {
+                _dbContext.Detach(history);
+            }
+
+            _dbContext.Detach(tracked);
+        }
+
         var release = await _dbContext.Releases
             .Include(item => item.Services)
             .Include(item => item.Approvals)
+            .Include(item => item.StatusHistory)
             .SingleOrDefaultAsync(item => item.Id == releaseId, cancellationToken);
 
         if (release is null)

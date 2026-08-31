@@ -65,50 +65,18 @@ public sealed class ApplicationDbContext
         where TEntity : class
         => Entry(entity).ReloadAsync(cancellationToken);
 
-    public override async Task<int> SaveChangesAsync(CancellationToken cancellationToken = default)
+    public void Detach<TEntity>(TEntity entity)
+        where TEntity : class
     {
-        const int maxAttempts = 3;
-
-        for (var attempt = 1; attempt <= maxAttempts; attempt++)
+        var entry = Entry(entity);
+        if (entry.State != EntityState.Detached)
         {
-            try
-            {
-                return await base.SaveChangesAsync(cancellationToken);
-            }
-            catch (DbUpdateConcurrencyException exception) when (attempt < maxAttempts)
-            {
-                _logger?.LogWarning(
-                    exception,
-                    "Concurrency conflict on save (attempt {Attempt}/{MaxAttempts}). Retrying with client-wins merge.",
-                    attempt,
-                    maxAttempts);
-
-                foreach (var entry in exception.Entries)
-                {
-                    _logger?.LogWarning(
-                        "Concurrency conflict entity: {Entity} key={Key}",
-                        entry.Metadata.Name,
-                        entry.Properties.FirstOrDefault(p => p.Metadata.IsPrimaryKey())?.CurrentValue);
-
-                    var databaseValues = await entry.GetDatabaseValuesAsync(cancellationToken);
-                    if (databaseValues is null)
-                    {
-                        entry.State = EntityState.Detached;
-                        continue;
-                    }
-
-                    var clientValues = entry.CurrentValues.ToObject();
-                    entry.OriginalValues.SetValues(databaseValues);
-                    if (clientValues is not null)
-                    {
-                        entry.CurrentValues.SetValues(clientValues);
-                    }
-                }
-            }
+            entry.State = EntityState.Detached;
         }
-
-        return await base.SaveChangesAsync(cancellationToken);
     }
+
+    public override Task<int> SaveChangesAsync(CancellationToken cancellationToken = default)
+        => base.SaveChangesAsync(cancellationToken);
 
     protected override void OnModelCreating(ModelBuilder builder)
     {
