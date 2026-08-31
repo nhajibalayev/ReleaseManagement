@@ -43,5 +43,8 @@ public interface IApplicationDbContext
     void Detach<TEntity>(TEntity entity)
         where TEntity : class;
 
+    void ForceAdded<TEntity>(TEntity entity)
+        where TEntity : class;
+
     Task<int> SaveChangesAsync(CancellationToken cancellationToken = default);
 }

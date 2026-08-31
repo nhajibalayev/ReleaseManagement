@@ -86,7 +86,6 @@ public sealed class ReleaseWorkflowService : IReleaseWorkflowService
 
         var release = await _dbContext.Releases
             .Include(item => item.Approvals)
-            .Include(item => item.StatusHistory)
             .SingleOrDefaultAsync(item => item.Id == request.ReleaseId, cancellationToken);
 
         if (release is null)
@@ -167,6 +166,17 @@ public sealed class ReleaseWorkflowService : IReleaseWorkflowService
             await _azureDevOpsSync.UpdateWorkItemIfNeededAsync(release, cancellationToken);
         }
 
+        foreach (var history in release.StatusHistory)
+        {
+            var exists = await _dbContext.ReleaseStatusHistories
+                .AsNoTracking()
+                .AnyAsync(item => item.Id == history.Id, cancellationToken);
+            if (!exists)
+            {
+                _dbContext.ForceAdded(history);
+            }
+        }
+
         await _dbContext.SaveChangesAsync(cancellationToken);
     }
 
@@ -199,7 +209,6 @@ public sealed class ReleaseWorkflowService : IReleaseWorkflowService
         var release = await _dbContext.Releases
             .Include(item => item.Services)
             .Include(item => item.Approvals)
-            .Include(item => item.StatusHistory)
             .SingleOrDefaultAsync(item => item.Id == releaseId, cancellationToken);
 
         if (release is null)
@@ -318,6 +327,13 @@ public sealed class ReleaseWorkflowService : IReleaseWorkflowService
         else
         {
             await _azureDevOpsSync.CreateWorkItemIfNeededAsync(release, cancellationToken);
+        }
+
+        // StatusHistory is added on an unloaded collection; force INSERT so EF does not
+        // emit UPDATE ... WHERE Id=... against rows that do not exist yet.
+        foreach (var history in release.StatusHistory)
+        {
+            _dbContext.ForceAdded(history);
         }
 
         await _dbContext.SaveChangesAsync(cancellationToken);

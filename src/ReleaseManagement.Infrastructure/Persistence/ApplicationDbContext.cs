@@ -75,16 +75,23 @@ public sealed class ApplicationDbContext
         }
     }
 
-    public override Task<int> SaveChangesAsync(CancellationToken cancellationToken = default)
-        => base.SaveChangesAsync(cancellationToken);
+    public void ForceAdded<TEntity>(TEntity entity)
+        where TEntity : class
+    {
+        var entry = Entry(entity);
+        if (entry.State == EntityState.Detached)
+        {
+            Set<TEntity>().Add(entity);
+            return;
+        }
+
+        entry.State = EntityState.Added;
+    }
 
     protected override void OnModelCreating(ModelBuilder builder)
     {
         base.OnModelCreating(builder);
         builder.ApplyConfigurationsFromAssembly(typeof(ApplicationDbContext).Assembly);
-
-        // Belt-and-suspenders: never treat PostgreSQL xmin as a concurrency token.
-        builder.Entity<Release>().Ignore(release => release.RowVersion);
 
         builder.HasSequence<long>("release_number_seq")
             .StartsAt(1)

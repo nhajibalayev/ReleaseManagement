@@ -623,12 +623,6 @@ namespace ReleaseManagement.Infrastructure.Persistence.Migrations
                         .HasMaxLength(8000)
                         .HasColumnType("character varying(8000)");
 
-                    b.Property<uint>("RowVersion")
-                        .IsConcurrencyToken()
-                        .ValueGeneratedOnAddOrUpdate()
-                        .HasColumnType("xid")
-                        .HasColumnName("xmin");
-
                     b.Property<DateTime?>("SubmittedDate")
                         .HasColumnType("timestamp with time zone");
 

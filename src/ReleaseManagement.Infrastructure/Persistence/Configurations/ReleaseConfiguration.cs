@@ -38,10 +38,6 @@ public sealed class ReleaseConfiguration : IEntityTypeConfiguration<Release>
         ConfigureUtc(builder.Property(x => x.CreatedDate));
         ConfigureUtc(builder.Property(x => x.UpdatedDate));
 
-        // Do not map PostgreSQL xmin. Npgsql treats xmin mappings as concurrency
-        // tokens and produces false DbUpdateConcurrencyException on updates.
-        builder.Ignore(x => x.RowVersion);
-
         builder.HasIndex(x => x.ReleaseNumber).IsUnique();
         builder.HasIndex(x => x.CurrentStatus);
         builder.HasIndex(x => x.CreatedByUserId);
