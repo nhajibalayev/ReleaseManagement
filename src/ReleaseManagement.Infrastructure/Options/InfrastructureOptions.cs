@@ -142,3 +142,13 @@ public sealed class SeedOptions
 
     public string DefaultPassword { get; set; } = "ChangeMe!123";
 }
+
+public sealed class HangfireOptions
+{
+    public const string SectionName = "Hangfire";
+
+    /// <summary>
+    /// When false, Azure DevOps sync runs inline during Submit/transition (no background worker).
+    /// </summary>
+    public bool Enabled { get; set; }
+}

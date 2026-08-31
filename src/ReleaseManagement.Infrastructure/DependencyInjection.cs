@@ -34,8 +34,10 @@ public static class DependencyInjection
         services.Configure<EmailOptions>(configuration.GetSection(EmailOptions.SectionName));
         services.Configure<FileStorageOptions>(configuration.GetSection(FileStorageOptions.SectionName));
         services.Configure<SeedOptions>(configuration.GetSection(SeedOptions.SectionName));
+        services.Configure<HangfireOptions>(configuration.GetSection(HangfireOptions.SectionName));
 
         var demoMode = configuration.GetValue<bool>("DemoMode");
+        var hangfireEnabled = configuration.GetValue<bool>($"{HangfireOptions.SectionName}:Enabled");
         var connectionString = configuration.GetConnectionString("DefaultConnection");
         var azureAd = configuration.GetSection(AzureAdOptions.SectionName).Get<AzureAdOptions>()
             ?? new AzureAdOptions();
@@ -135,6 +137,8 @@ public static class DependencyInjection
         services.AddScoped<IActiveDirectoryAuthenticator, ActiveDirectoryAuthenticator>();
         services.AddScoped<IAzureDevOpsUserCredentialStore, SessionAzureDevOpsUserCredentialStore>();
         services.AddScoped<IAzureDevOpsTokenProvider, AzureDevOpsTokenProvider>();
+        services.AddScoped<IBackgroundJobSettings, BackgroundJobSettings>();
+        services.AddScoped<IAzureDevOpsReleaseSyncService, AzureDevOpsReleaseSyncService>();
         services.AddScoped<DevelopmentDataSeeder>();
         services.AddTransient<OutboxProcessorJob>();
         services.AddTransient<TemporaryFileCleanupJob>();
@@ -152,7 +156,7 @@ public static class DependencyInjection
                 AzureDevOpsHttpClientConfigurator.CreateHandler(azureDevOps))
             .AddStandardResilienceHandler();
 
-        if (!demoMode)
+        if (!demoMode && hangfireEnabled)
         {
             services.AddHangfire(config => config
                 .SetDataCompatibilityLevel(CompatibilityLevel.Version_180)
@@ -218,8 +222,13 @@ public static class DependencyInjection
         return services;
     }
 
-    public static void MapInfrastructureJobs()
+    public static void MapInfrastructureJobs(IConfiguration configuration)
     {
+        if (!configuration.GetValue<bool>($"{HangfireOptions.SectionName}:Enabled"))
+        {
+            return;
+        }
+
         RecurringJob.AddOrUpdate<OutboxProcessorJob>(
             "outbox-processor",
             job => job.ProcessAsync(),

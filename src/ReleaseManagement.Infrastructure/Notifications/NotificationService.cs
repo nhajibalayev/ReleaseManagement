@@ -61,17 +61,20 @@ public sealed class NotificationService : INotificationService
     private readonly IClock _clock;
     private readonly UserManager<AppIdentityUser> _userManager;
     private readonly IOutboxWriter _outbox;
+    private readonly IBackgroundJobSettings _backgroundJobs;
 
     public NotificationService(
         ApplicationDbContext dbContext,
         IClock clock,
         UserManager<AppIdentityUser> userManager,
-        IOutboxWriter outbox)
+        IOutboxWriter outbox,
+        IBackgroundJobSettings backgroundJobs)
     {
         _dbContext = dbContext;
         _clock = clock;
         _userManager = userManager;
         _outbox = outbox;
+        _backgroundJobs = backgroundJobs;
     }
 
     public async Task CreateAsync(
@@ -93,17 +96,20 @@ public sealed class NotificationService : INotificationService
 
         _dbContext.Notifications.Add(notification);
 
-        await _outbox.EnqueueAsync(
-            OutboxMessageTypes.SendEmailNotification,
-            System.Text.Json.JsonSerializer.Serialize(new
-            {
-                NotificationId = notification.Id,
-                UserId = userId,
-                Title = title,
-                Message = message
-            }),
-            idempotencyKey: $"email:{notification.Id}",
-            cancellationToken);
+        if (_backgroundJobs.HangfireEnabled)
+        {
+            await _outbox.EnqueueAsync(
+                OutboxMessageTypes.SendEmailNotification,
+                System.Text.Json.JsonSerializer.Serialize(new
+                {
+                    NotificationId = notification.Id,
+                    UserId = userId,
+                    Title = title,
+                    Message = message
+                }),
+                idempotencyKey: $"email:{notification.Id}",
+                cancellationToken);
+        }
     }
 
     public async Task MarkAsReadAsync(

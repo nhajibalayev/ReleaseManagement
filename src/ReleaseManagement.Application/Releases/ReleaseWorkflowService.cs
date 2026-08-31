@@ -22,6 +22,8 @@ public sealed class ReleaseWorkflowService : IReleaseWorkflowService
     private readonly IAuditService _audit;
     private readonly IOutboxWriter _outbox;
     private readonly IAzureDevOpsTokenProvider _azureDevOpsTokenProvider;
+    private readonly IBackgroundJobSettings _backgroundJobs;
+    private readonly IAzureDevOpsReleaseSyncService _azureDevOpsSync;
     private readonly IValidator<TransitionReleaseRequest> _transitionValidator;
 
     public ReleaseWorkflowService(
@@ -33,6 +35,8 @@ public sealed class ReleaseWorkflowService : IReleaseWorkflowService
         IAuditService audit,
         IOutboxWriter outbox,
         IAzureDevOpsTokenProvider azureDevOpsTokenProvider,
+        IBackgroundJobSettings backgroundJobs,
+        IAzureDevOpsReleaseSyncService azureDevOpsSync,
         IValidator<TransitionReleaseRequest> transitionValidator)
     {
         _dbContext = dbContext;
@@ -43,6 +47,8 @@ public sealed class ReleaseWorkflowService : IReleaseWorkflowService
         _audit = audit;
         _outbox = outbox;
         _azureDevOpsTokenProvider = azureDevOpsTokenProvider;
+        _backgroundJobs = backgroundJobs;
+        _azureDevOpsSync = azureDevOpsSync;
         _transitionValidator = transitionValidator;
     }
 
@@ -142,16 +148,23 @@ public sealed class ReleaseWorkflowService : IReleaseWorkflowService
             },
             cancellationToken);
 
-        await _outbox.EnqueueAsync(
-            OutboxMessageTypes.AzureDevOpsUpdateWorkItem,
-            JsonSerializer.Serialize(new
-            {
-                ReleaseId = release.Id,
-                Status = release.CurrentStatus,
-                AccessToken = await _azureDevOpsTokenProvider.GetAccessTokenAsync(cancellationToken)
-            }),
-            idempotencyKey: $"ado-update:{release.Id}:{release.CurrentStatus}:{release.UpdatedDate:O}",
-            cancellationToken);
+        if (_backgroundJobs.HangfireEnabled)
+        {
+            await _outbox.EnqueueAsync(
+                OutboxMessageTypes.AzureDevOpsUpdateWorkItem,
+                JsonSerializer.Serialize(new
+                {
+                    ReleaseId = release.Id,
+                    Status = release.CurrentStatus,
+                    AccessToken = await _azureDevOpsTokenProvider.GetAccessTokenAsync(cancellationToken)
+                }),
+                idempotencyKey: $"ado-update:{release.Id}:{release.CurrentStatus}:{release.UpdatedDate:O}",
+                cancellationToken);
+        }
+        else
+        {
+            await _azureDevOpsSync.UpdateWorkItemIfNeededAsync(release, cancellationToken);
+        }
 
         await _dbContext.SaveChangesAsync(cancellationToken);
     }
@@ -266,15 +279,22 @@ public sealed class ReleaseWorkflowService : IReleaseWorkflowService
                 cancellationToken);
         }
 
-        await _outbox.EnqueueAsync(
-            OutboxMessageTypes.AzureDevOpsCreateWorkItem,
-            JsonSerializer.Serialize(new
-            {
-                ReleaseId = release.Id,
-                AccessToken = await _azureDevOpsTokenProvider.GetAccessTokenAsync(cancellationToken)
-            }),
-            idempotencyKey: $"ado-create:{release.Id}",
-            cancellationToken);
+        if (_backgroundJobs.HangfireEnabled)
+        {
+            await _outbox.EnqueueAsync(
+                OutboxMessageTypes.AzureDevOpsCreateWorkItem,
+                JsonSerializer.Serialize(new
+                {
+                    ReleaseId = release.Id,
+                    AccessToken = await _azureDevOpsTokenProvider.GetAccessTokenAsync(cancellationToken)
+                }),
+                idempotencyKey: $"ado-create:{release.Id}",
+                cancellationToken);
+        }
+        else
+        {
+            await _azureDevOpsSync.CreateWorkItemIfNeededAsync(release, cancellationToken);
+        }
 
         await _dbContext.SaveChangesAsync(cancellationToken);
     }

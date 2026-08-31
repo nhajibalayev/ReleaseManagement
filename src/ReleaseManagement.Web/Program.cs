@@ -1,6 +1,5 @@
 using Hangfire;
 using ReleaseManagement.Infrastructure;
-using ReleaseManagement.Infrastructure.Jobs;
 using ReleaseManagement.Infrastructure.Persistence;
 using Serilog;
 
@@ -32,6 +31,7 @@ try
     });
     builder.Services.AddInfrastructure(builder.Configuration);
     var demoMode = builder.Configuration.GetValue<bool>("DemoMode");
+    var hangfireEnabled = builder.Configuration.GetValue<bool>("Hangfire:Enabled");
 
     var app = builder.Build();
 
@@ -61,20 +61,9 @@ try
     });
     app.MapHealthChecks("/health/ready");
 
-    if (!demoMode)
+    if (!demoMode && hangfireEnabled)
     {
-        try
-        {
-            using var scope = app.Services.CreateScope();
-            var lockCleaner = scope.ServiceProvider.GetRequiredService<HangfireStartupLockCleaner>();
-            await lockCleaner.ClearStaleLocksAsync();
-        }
-        catch (Exception lockException)
-        {
-            Log.Warning(lockException, "Failed to clear stale Hangfire locks.");
-        }
-
-        app.UseHangfireDashboard("/hangfire", new DashboardOptions
+        app.UseHangfireDashboard("/hangfire", new Hangfire.DashboardOptions
         {
             Authorization = [new Hangfire.Dashboard.LocalRequestsOnlyAuthorizationFilter()]
         });
@@ -91,9 +80,9 @@ try
         Log.Warning(seedException, "Database seed/migration failed. Ensure PostgreSQL is running.");
     }
 
-    if (!demoMode)
+    if (!demoMode && hangfireEnabled)
     {
-        DependencyInjection.MapInfrastructureJobs();
+        DependencyInjection.MapInfrastructureJobs(builder.Configuration);
     }
 
     await app.RunAsync();
