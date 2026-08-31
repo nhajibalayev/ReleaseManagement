@@ -43,7 +43,7 @@ calls Azure DevOps Server REST APIs **as that user** (no PAT required).
     "Enabled": true,
     "OrganizationUrl": "https://devops.nh-nk.az/DefaultCollection",
     "Project": "<project-name>",
-    "WorkItemType": "Task",
+    "WorkItemType": "Release",
     "ApiVersion": "7.1",
     "AreaPath": "",
     "IterationPath": "",
@@ -92,7 +92,7 @@ Optional: set `WindowsAuth:EnableNegotiate` to `true` for browser integrated Win
     "Enabled": true,
     "OrganizationUrl": "https://dev.azure.com/<org>",
     "Project": "<project>",
-    "WorkItemType": "Task",
+    "WorkItemType": "Release",
     "RequireProjectAccessToCreate": true
   }
 }

@@ -72,7 +72,7 @@ public sealed class AzureDevOpsOptions
     /// </summary>
     public string PersonalAccessToken { get; set; } = string.Empty;
 
-    public string WorkItemType { get; set; } = "Task";
+    public string WorkItemType { get; set; } = "Release";
 
     public bool Enabled { get; set; }
 
