@@ -9,6 +9,9 @@ public static class AuthorizationPolicies
     public const string CanPerformPentest = "CanPerformPentest";
     public const string CanPerformInfoSecReview = "CanPerformInfoSecReview";
     public const string CanApproveBusiness = "CanApproveBusiness";
+    public const string CanPerformQaReview = "CanPerformQaReview";
+    public const string CanPerformRiskReview = "CanPerformRiskReview";
+    public const string CanPerformChapterLeadReview = "CanPerformChapterLeadReview";
     public const string CanDeployRelease = "CanDeployRelease";
     public const string CanManageSystem = "CanManageSystem";
     public const string CanViewAuditLogs = "CanViewAuditLogs";

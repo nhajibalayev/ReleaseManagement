@@ -1,0 +1,150 @@
+@model ReleaseDetailsPageViewModel
+@{
+    Layout = null;
+    ViewData["Title"] = $"Print {Model.ReleaseNumber}";
+    var rootComments = Model.Comments.Where(c => c.ParentCommentId is null).ToArray();
+    var repliesByParent = Model.Comments
+        .Where(c => c.ParentCommentId.HasValue)
+        .GroupBy(c => c.ParentCommentId!.Value)
+        .ToDictionary(g => g.Key, g => g.ToArray());
+}
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="utf-8" />
+    <title>@ViewData["Title"]</title>
+    <style>
+        body { font-family: Georgia, "Times New Roman", serif; color: #1a1a1a; margin: 2rem; line-height: 1.45; }
+        h1 { font-size: 1.6rem; margin: 0 0 .25rem; }
+        h2 { font-size: 1.15rem; margin: 1.5rem 0 .5rem; border-bottom: 1px solid #ccc; padding-bottom: .25rem; }
+        .meta { color: #555; margin-bottom: 1rem; }
+        .badge { display: inline-block; border: 1px solid #333; padding: .15rem .5rem; font-size: .85rem; }
+        dl { display: grid; grid-template-columns: 11rem 1fr; gap: .35rem .75rem; }
+        dt { font-weight: 700; }
+        dd { margin: 0; }
+        .block { white-space: pre-wrap; margin: 0 0 1rem; }
+        table { width: 100%; border-collapse: collapse; margin-bottom: 1rem; }
+        th, td { border: 1px solid #ccc; padding: .35rem .5rem; text-align: left; vertical-align: top; }
+        .comment { margin-bottom: .75rem; }
+        .reply { margin-left: 1.25rem; border-left: 2px solid #ddd; padding-left: .75rem; }
+        .no-print { margin-bottom: 1rem; }
+        @@media print {
+            .no-print { display: none !important; }
+            body { margin: 0; }
+        }
+    </style>
+</head>
+<body>
+    <div class="no-print">
+        <button type="button" onclick="window.print()">Print / Save as PDF</button>
+        <a href="@Url.Action("Details", new { id = Model.Id })">Back to release</a>
+    </div>
+
+    <h1>@Model.ReleaseNumber — @Model.Title</h1>
+    <div class="meta">
+        <span class="badge">@Model.Status.CurrentStatusDisplay</span>
+        · @Model.Priority priority
+        · Planned @Model.PlannedReleaseDate.ToLocalTime().ToString("g")
+        · Responsible: @(Model.Status.CurrentResponsibleDisplay ?? "Unassigned")
+    </div>
+
+    <h2>Summary</h2>
+    <dl>
+        <dt>Product</dt><dd>@(Model.ProductName ?? "—")</dd>
+        <dt>Environment</dt><dd>@(Model.EnvironmentName ?? "—")</dd>
+        <dt>Version</dt><dd>@(string.IsNullOrWhiteSpace(Model.ReleaseVersion) ? "—" : Model.ReleaseVersion)</dd>
+        <dt>Risk level</dt><dd>@Model.RiskLevel</dd>
+        <dt>Downtime</dt><dd>@(Model.DowntimeRequired ? $"{Model.ExpectedDowntimeMinutes ?? 0} minutes" : "Not required")</dd>
+        <dt>Azure DevOps</dt><dd>@(Model.AzureDevOpsWorkItemId?.ToString() ?? "—")</dd>
+    </dl>
+
+    @foreach (var item in new[] {
+        ("Description", Model.Description), ("Testing summary", Model.TestingSummary),
+        ("Risk description", Model.RiskDescription), ("Deployment plan", Model.DeploymentPlan),
+        ("Rollback plan", Model.RollbackPlan), ("Monitoring plan", Model.MonitoringPlan),
+        ("Post-release validation", Model.PostReleaseValidationPlan) })
+    {
+        <h2>@item.Item1</h2>
+        <p class="block">@(string.IsNullOrWhiteSpace(item.Item2) ? "—" : item.Item2)</p>
+    }
+
+    <h2>Services</h2>
+    <table>
+        <thead>
+            <tr><th>Service</th><th>Branch</th><th>Commit</th><th>Version / build</th><th>Notes</th></tr>
+        </thead>
+        <tbody>
+        @foreach (var service in Model.Services)
+        {
+            <tr>
+                <td>@(string.IsNullOrWhiteSpace(service.ServiceName) ? service.ServiceId.ToString() : service.ServiceName)</td>
+                <td>@(service.BranchName ?? "—")</td>
+                <td>@(service.CommitId ?? "—")</td>
+                <td>@(service.Version ?? "—") / @(service.BuildNumber ?? "—")</td>
+                <td>@(string.IsNullOrWhiteSpace(service.Notes) ? "—" : service.Notes)</td>
+            </tr>
+        }
+        @if (!Model.Services.Any())
+        {
+            <tr><td colspan="5">No services.</td></tr>
+        }
+        </tbody>
+    </table>
+
+    <h2>Approvals</h2>
+    <table>
+        <thead><tr><th>Type</th><th>Status</th><th>Requested</th><th>Decision</th><th>Comment</th></tr></thead>
+        <tbody>
+        @foreach (var item in Model.Approvals)
+        {
+            <tr>
+                <td>@item.ApprovalType</td>
+                <td>@item.Status</td>
+                <td>@item.RequestedDate.ToLocalTime().ToString("g")</td>
+                <td>@(item.DecisionDate?.ToLocalTime().ToString("g") ?? "—")</td>
+                <td>@(item.Comment ?? "—")</td>
+            </tr>
+        }
+        @if (!Model.Approvals.Any())
+        {
+            <tr><td colspan="5">No approvals.</td></tr>
+        }
+        </tbody>
+    </table>
+
+    <h2>Dialogue</h2>
+    @if (!rootComments.Any())
+    {
+        <p>No comments.</p>
+    }
+    @foreach (var item in rootComments)
+    {
+        <div class="comment">
+            <strong>@item.Author</strong> · @item.CreatedDate.ToLocalTime().ToString("g")
+            <div class="block">@item.Comment</div>
+            @if (repliesByParent.TryGetValue(item.Id, out var replies))
+            {
+                foreach (var reply in replies)
+                {
+                    <div class="reply">
+                        <strong>@reply.Author</strong> · @reply.CreatedDate.ToLocalTime().ToString("g")
+                        <div class="block">@reply.Comment</div>
+                    </div>
+                }
+            }
+        </div>
+    }
+
+    <h2>Status history</h2>
+    <ul>
+        @foreach (var item in Model.History)
+        {
+            <li>
+                <strong>@item.FromStatus → @item.ToStatus</strong>
+                — @item.ChangedDate.ToLocalTime().ToString("g")
+                @(string.IsNullOrWhiteSpace(item.Comment) ? "" : $" — {item.Comment}")
+            </li>
+        }
+    </ul>
+</body>
+</html>

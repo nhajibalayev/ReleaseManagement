@@ -65,6 +65,9 @@ public sealed class ApprovalService : IApprovalService
             ApprovalType.Pentest => ReleaseStatus.PentestReview,
             ApprovalType.InfoSec => ReleaseStatus.InfoSecReview,
             ApprovalType.Business => ReleaseStatus.BusinessApproval,
+            ApprovalType.QA => ReleaseStatus.QaReview,
+            ApprovalType.Risk => ReleaseStatus.RiskReview,
+            ApprovalType.ChapterLead => ReleaseStatus.ChapterLeadReview,
             _ => throw new BusinessRuleException("Unsupported approval type.")
         };
 
@@ -72,6 +75,13 @@ public sealed class ApprovalService : IApprovalService
         {
             throw new ConflictException(
                 $"Release '{release.ReleaseNumber}' is not awaiting {request.ApprovalType} approval.");
+        }
+
+        // RM routes via Available actions, not Approve → next stage.
+        if (request.ApprovalType == ApprovalType.ReleaseManager)
+        {
+            throw new BusinessRuleException(
+                "Release Manager must choose the next structure from Available actions.");
         }
 
         var targetStatus = ResolveTargetStatus(request.ApprovalType, request.Decision);
@@ -172,6 +182,24 @@ public sealed class ApprovalService : IApprovalService
             statuses.Add(ReleaseStatus.BusinessApproval);
         }
 
+        if (_currentUser.IsInRole(RoleNames.Administrator) ||
+            _currentUser.IsInRole(RoleNames.QA))
+        {
+            statuses.Add(ReleaseStatus.QaReview);
+        }
+
+        if (_currentUser.IsInRole(RoleNames.Administrator) ||
+            _currentUser.IsInRole(RoleNames.Risk))
+        {
+            statuses.Add(ReleaseStatus.RiskReview);
+        }
+
+        if (_currentUser.IsInRole(RoleNames.Administrator) ||
+            _currentUser.IsInRole(RoleNames.ChapterLead))
+        {
+            statuses.Add(ReleaseStatus.ChapterLeadReview);
+        }
+
         return statuses.Distinct().ToArray();
     }
 
@@ -179,27 +207,36 @@ public sealed class ApprovalService : IApprovalService
         ApprovalType approvalType,
         ApprovalStatus decision)
     {
+        // Structure confirmations always return to RM so RM can send to the next structure.
         return (approvalType, decision) switch
         {
-            (ApprovalType.ReleaseManager, ApprovalStatus.Approved) => ReleaseStatus.PentestReview,
-            (ApprovalType.ReleaseManager, ApprovalStatus.ChangesRequired) =>
-                ReleaseStatus.ReturnedForRevision,
-            (ApprovalType.ReleaseManager, ApprovalStatus.Rejected) => ReleaseStatus.Rejected,
-
-            (ApprovalType.Pentest, ApprovalStatus.Approved) => ReleaseStatus.InfoSecReview,
+            (ApprovalType.Pentest, ApprovalStatus.Approved) => ReleaseStatus.ReleaseManagerReview,
             (ApprovalType.Pentest, ApprovalStatus.ChangesRequired) =>
                 ReleaseStatus.PentestChangesRequired,
             (ApprovalType.Pentest, ApprovalStatus.Rejected) => ReleaseStatus.Rejected,
 
-            (ApprovalType.InfoSec, ApprovalStatus.Approved) => ReleaseStatus.BusinessApproval,
+            (ApprovalType.InfoSec, ApprovalStatus.Approved) => ReleaseStatus.ReleaseManagerReview,
             (ApprovalType.InfoSec, ApprovalStatus.ChangesRequired) =>
                 ReleaseStatus.InfoSecChangesRequired,
             (ApprovalType.InfoSec, ApprovalStatus.Rejected) => ReleaseStatus.Rejected,
 
-            (ApprovalType.Business, ApprovalStatus.Approved) => ReleaseStatus.Approved,
+            (ApprovalType.Business, ApprovalStatus.Approved) => ReleaseStatus.ReleaseManagerReview,
             (ApprovalType.Business, ApprovalStatus.ChangesRequired) =>
                 ReleaseStatus.BusinessChangesRequired,
             (ApprovalType.Business, ApprovalStatus.Rejected) => ReleaseStatus.Rejected,
+
+            (ApprovalType.QA, ApprovalStatus.Approved) => ReleaseStatus.ReleaseManagerReview,
+            (ApprovalType.QA, ApprovalStatus.ChangesRequired) => ReleaseStatus.QaChangesRequired,
+            (ApprovalType.QA, ApprovalStatus.Rejected) => ReleaseStatus.Rejected,
+
+            (ApprovalType.Risk, ApprovalStatus.Approved) => ReleaseStatus.ReleaseManagerReview,
+            (ApprovalType.Risk, ApprovalStatus.ChangesRequired) => ReleaseStatus.RiskChangesRequired,
+            (ApprovalType.Risk, ApprovalStatus.Rejected) => ReleaseStatus.Rejected,
+
+            (ApprovalType.ChapterLead, ApprovalStatus.Approved) => ReleaseStatus.ReleaseManagerReview,
+            (ApprovalType.ChapterLead, ApprovalStatus.ChangesRequired) =>
+                ReleaseStatus.ChapterLeadChangesRequired,
+            (ApprovalType.ChapterLead, ApprovalStatus.Rejected) => ReleaseStatus.Rejected,
 
             _ => throw new BusinessRuleException("Unsupported approval decision.")
         };
@@ -211,6 +248,9 @@ public sealed class ApprovalService : IApprovalService
         ReleaseStatus.PentestReview => ApprovalType.Pentest,
         ReleaseStatus.InfoSecReview => ApprovalType.InfoSec,
         ReleaseStatus.BusinessApproval => ApprovalType.Business,
+        ReleaseStatus.QaReview => ApprovalType.QA,
+        ReleaseStatus.RiskReview => ApprovalType.Risk,
+        ReleaseStatus.ChapterLeadReview => ApprovalType.ChapterLead,
         _ => ApprovalType.ReleaseManager
     };
 }
@@ -221,11 +261,10 @@ internal static class DateTimeExtensions
     {
         var result = date;
         var remaining = days;
-
         while (remaining > 0)
         {
             result = result.AddDays(1);
-            if (result.DayOfWeek is not (DayOfWeek.Saturday or DayOfWeek.Sunday))
+            if (result.DayOfWeek is not DayOfWeek.Saturday and not DayOfWeek.Sunday)
             {
                 remaining--;
             }

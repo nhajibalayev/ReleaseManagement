@@ -214,6 +214,13 @@ public sealed class ReleasesController : Controller
         return View(page);
     }
 
+    [HttpGet]
+    public async Task<IActionResult> Print(Guid id, CancellationToken cancellationToken)
+    {
+        var page = await BuildDetailsPageAsync(id, cancellationToken);
+        return View(page);
+    }
+
     [HttpPost]
     [ValidateAntiForgeryToken]
     public async Task<IActionResult> Transition(TransitionFormViewModel model, CancellationToken cancellationToken)
@@ -275,7 +282,7 @@ public sealed class ReleasesController : Controller
             model.Comment,
             CommentType.General,
             isInternal: false,
-            parentCommentId: null,
+            parentCommentId: model.ParentCommentId,
             _clock.UtcNow);
 
         _dbContext.ReleaseComments.Add(comment);
@@ -381,8 +388,8 @@ public sealed class ReleasesController : Controller
 
         var comments = await _dbContext.ReleaseComments.AsNoTracking()
             .Where(item => item.ReleaseId == id)
-            .OrderByDescending(item => item.CreatedDate)
-            .Take(50)
+            .OrderBy(item => item.CreatedDate)
+            .Take(200)
             .ToListAsync(cancellationToken);
 
         var commentAuthors = await _dbContext.Users.AsNoTracking()
@@ -460,6 +467,8 @@ public sealed class ReleasesController : Controller
             }).ToArray(),
             Comments = comments.Select(item => new CommentItemViewModel
             {
+                Id = item.Id,
+                ParentCommentId = item.ParentCommentId,
                 Author = commentAuthors.GetValueOrDefault(item.UserId, "Unknown"),
                 Comment = item.Comment,
                 CreatedDate = item.CreatedDate,

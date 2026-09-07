@@ -21,7 +21,13 @@ public enum ReleaseStatus
     RolledBack = 17,
     Rejected = 18,
     Closed = 19,
-    Cancelled = 20
+    Cancelled = 20,
+    QaReview = 21,
+    QaChangesRequired = 22,
+    RiskReview = 23,
+    RiskChangesRequired = 24,
+    ChapterLeadReview = 25,
+    ChapterLeadChangesRequired = 26
 }
 
 public enum ReleaseType

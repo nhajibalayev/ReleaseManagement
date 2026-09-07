@@ -12,7 +12,10 @@ public enum ApprovalType
     ReleaseManager = 1,
     Pentest = 2,
     InfoSec = 3,
-    Business = 4
+    Business = 4,
+    QA = 5,
+    Risk = 6,
+    ChapterLead = 7
 }
 
 public enum ApprovalStatus

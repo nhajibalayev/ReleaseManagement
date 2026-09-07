@@ -11,20 +11,40 @@ public sealed class ReleaseWorkflowRulesTests
     [InlineData(ReleaseStatus.Draft, ReleaseStatus.Submitted, RoleNames.ProductOwner)]
     [InlineData(
         ReleaseStatus.ReleaseManagerReview,
-        ReleaseStatus.PentestReview,
+        ReleaseStatus.QaReview,
         RoleNames.ReleaseManager)]
     [InlineData(
-        ReleaseStatus.PentestReview,
+        ReleaseStatus.ReleaseManagerReview,
         ReleaseStatus.InfoSecReview,
-        RoleNames.Pentest)]
+        RoleNames.ReleaseManager)]
+    [InlineData(
+        ReleaseStatus.ReleaseManagerReview,
+        ReleaseStatus.RiskReview,
+        RoleNames.ReleaseManager)]
+    [InlineData(
+        ReleaseStatus.ReleaseManagerReview,
+        ReleaseStatus.ChapterLeadReview,
+        RoleNames.ReleaseManager)]
+    [InlineData(
+        ReleaseStatus.ReleaseManagerReview,
+        ReleaseStatus.Approved,
+        RoleNames.ReleaseManager)]
+    [InlineData(
+        ReleaseStatus.QaReview,
+        ReleaseStatus.ReleaseManagerReview,
+        RoleNames.QA)]
     [InlineData(
         ReleaseStatus.InfoSecReview,
-        ReleaseStatus.BusinessApproval,
+        ReleaseStatus.ReleaseManagerReview,
         RoleNames.InfoSec)]
     [InlineData(
-        ReleaseStatus.BusinessApproval,
-        ReleaseStatus.Approved,
-        RoleNames.BusinessApprover)]
+        ReleaseStatus.RiskReview,
+        ReleaseStatus.ReleaseManagerReview,
+        RoleNames.Risk)]
+    [InlineData(
+        ReleaseStatus.ChapterLeadReview,
+        ReleaseStatus.ReleaseManagerReview,
+        RoleNames.ChapterLead)]
     [InlineData(
         ReleaseStatus.ReadyForRelease,
         ReleaseStatus.DeploymentInProgress,
@@ -41,6 +61,17 @@ public sealed class ReleaseWorkflowRulesTests
         var result = ReleaseWorkflowRules.CanTransition(currentStatus, targetStatus, [role]);
 
         Assert.True(result);
+    }
+
+    [Fact]
+    public void CanTransition_ReturnsFalse_WhenRmTriesOldLinearPentestPath()
+    {
+        var result = ReleaseWorkflowRules.CanTransition(
+            ReleaseStatus.ReleaseManagerReview,
+            ReleaseStatus.PentestReview,
+            [RoleNames.ReleaseManager]);
+
+        Assert.False(result);
     }
 
     [Fact]

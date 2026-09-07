@@ -8,8 +8,11 @@ public sealed class ReleaseStatusDisplayTests
 {
     [Theory]
     [InlineData(ReleaseStatus.InfoSecReview, "InfoSec Review", "Information Security")]
-    [InlineData(ReleaseStatus.ReturnedForRevision, "Returned for Revision", "Product Owner")]
+    [InlineData(ReleaseStatus.ReturnedForRevision, "Returned to Team", "Product Owner")]
     [InlineData(ReleaseStatus.ReadyForRelease, "Ready for Release", "DevOps")]
+    [InlineData(ReleaseStatus.QaReview, "QA Review", "QA")]
+    [InlineData(ReleaseStatus.RiskReview, "Risk Review", "Risk")]
+    [InlineData(ReleaseStatus.ChapterLeadReview, "Chapter Lead Review", "Chapter Lead")]
     public void Formats_status_and_responsible_role(
         ReleaseStatus status,
         string expectedStatus,
@@ -22,11 +25,14 @@ public sealed class ReleaseStatusDisplayTests
     }
 
     [Fact]
-    public void Next_stage_after_infosec_is_business_approval()
+    public void Next_stage_after_structure_review_returns_to_rm()
     {
         Assert.Equal(
-            "Business Approval",
+            "Release Manager Review",
             ReleaseStatusDisplay.GetNextStageDisplay(ReleaseStatus.InfoSecReview));
+        Assert.Equal(
+            "Release Manager Review",
+            ReleaseStatusDisplay.GetNextStageDisplay(ReleaseStatus.QaReview));
     }
 
     [Fact]

@@ -271,6 +271,8 @@ public sealed class CommentFormViewModel
 {
     public Guid ReleaseId { get; set; }
 
+    public Guid? ParentCommentId { get; set; }
+
     [Required]
     [MaxLength(4000)]
     public string Comment { get; set; } = string.Empty;
@@ -278,6 +280,10 @@ public sealed class CommentFormViewModel
 
 public sealed class CommentItemViewModel
 {
+    public Guid Id { get; init; }
+
+    public Guid? ParentCommentId { get; init; }
+
     public string Author { get; init; } = string.Empty;
 
     public string Comment { get; init; } = string.Empty;

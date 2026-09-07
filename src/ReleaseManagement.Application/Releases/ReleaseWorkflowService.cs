@@ -354,7 +354,10 @@ public sealed class ReleaseWorkflowService : IReleaseWorkflowService
             ReleaseStatus.ReturnedForRevision or
             ReleaseStatus.PentestChangesRequired or
             ReleaseStatus.InfoSecChangesRequired or
-            ReleaseStatus.BusinessChangesRequired
+            ReleaseStatus.BusinessChangesRequired or
+            ReleaseStatus.QaChangesRequired or
+            ReleaseStatus.RiskChangesRequired or
+            ReleaseStatus.ChapterLeadChangesRequired
             ? createdByUserId
             : null;
     }
@@ -398,15 +401,21 @@ public sealed class ReleaseWorkflowService : IReleaseWorkflowService
             ReleaseStatus.ReturnedForRevision or
             ReleaseStatus.PentestChangesRequired or
             ReleaseStatus.InfoSecChangesRequired or
-            ReleaseStatus.BusinessChangesRequired => ApprovalStatus.ChangesRequired,
+            ReleaseStatus.BusinessChangesRequired or
+            ReleaseStatus.QaChangesRequired or
+            ReleaseStatus.RiskChangesRequired or
+            ReleaseStatus.ChapterLeadChangesRequired => ApprovalStatus.ChangesRequired,
             ReleaseStatus.Rejected => ApprovalStatus.Rejected,
-            ReleaseStatus.PentestReview when previousStatus == ReleaseStatus.ReleaseManagerReview
+            // Structure confirmed → back to RM (sequential orchestration).
+            ReleaseStatus.ReleaseManagerReview when previousStatus is
+                ReleaseStatus.QaReview or
+                ReleaseStatus.InfoSecReview or
+                ReleaseStatus.RiskReview or
+                ReleaseStatus.ChapterLeadReview or
+                ReleaseStatus.PentestReview or
+                ReleaseStatus.BusinessApproval
                 => ApprovalStatus.Approved,
-            ReleaseStatus.InfoSecReview when previousStatus == ReleaseStatus.PentestReview
-                => ApprovalStatus.Approved,
-            ReleaseStatus.BusinessApproval when previousStatus == ReleaseStatus.InfoSecReview
-                => ApprovalStatus.Approved,
-            ReleaseStatus.Approved when previousStatus == ReleaseStatus.BusinessApproval
+            ReleaseStatus.Approved when previousStatus == ReleaseStatus.ReleaseManagerReview
                 => ApprovalStatus.Approved,
             _ => null
         };

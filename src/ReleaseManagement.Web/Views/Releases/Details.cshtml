@@ -2,6 +2,12 @@
 @{
     ViewData["Title"] = Model.ReleaseNumber;
     var approvalType = ReleaseStatusDisplay.MapStatusToApprovalType(Model.Status.CurrentStatus);
+    var isRmOrchestration = Model.Status.CurrentStatus == ReleaseStatus.ReleaseManagerReview;
+    var rootComments = Model.Comments.Where(c => c.ParentCommentId is null).ToArray();
+    var repliesByParent = Model.Comments
+        .Where(c => c.ParentCommentId.HasValue)
+        .GroupBy(c => c.ParentCommentId!.Value)
+        .ToDictionary(g => g.Key, g => g.ToArray());
 }
 
 <div class="panel">
@@ -15,6 +21,9 @@
             <div><strong>@Model.Priority priority</strong></div>
             <div class="text-muted">Planned @Model.PlannedReleaseDate.ToLocalTime().ToString("g")</div>
             <div class="text-muted">Responsible: @(Model.Status.CurrentResponsibleDisplay ?? "Unassigned")</div>
+            <div class="mt-2">
+                <a class="btn btn-sm btn-outline-secondary" asp-action="Print" asp-route-id="@Model.Id" target="_blank" rel="noopener">Print</a>
+            </div>
         </div>
     </div>
 </div>
@@ -44,7 +53,11 @@
 @if (Model.AllowedTransitions.Any())
 {
     <section class="panel">
-        <h2 class="h5">Available actions</h2>
+        <h2 class="h5">@(isRmOrchestration ? "Release Manager: send for confirmation" : "Available actions")</h2>
+        @if (isRmOrchestration)
+        {
+            <p class="text-muted">Send to <strong>one</strong> structure at a time. After they respond, the release returns here so you can choose the next step.</p>
+        }
         <div class="row g-3">
             @foreach (var target in Model.AllowedTransitions)
             {
@@ -52,7 +65,7 @@
                     <form asp-action="Transition" method="post" class="border rounded p-3 h-100">
                         <input type="hidden" name="ReleaseId" value="@Model.Id" />
                         <input type="hidden" name="TargetStatus" value="@target" />
-                        <label class="form-label fw-semibold">@ReleaseStatusDisplay.Format(target)</label>
+                        <label class="form-label fw-semibold">@ReleaseStatusDisplay.FormatAction(target)</label>
                         <textarea name="Comment" class="form-control form-control-sm mb-2" rows="2" placeholder="Comment or reason"></textarea>
                         <button type="submit" class="btn btn-sm btn-accent">Confirm</button>
                     </form>
@@ -66,6 +79,7 @@
 {
     <section class="panel">
         <h2 class="h5">Approval decision</h2>
+        <p class="text-muted">Approve returns the release to the Release Manager for the next structure (or finish).</p>
         <form asp-controller="Approvals" asp-action="Decide" method="post">
             <input type="hidden" name="ReleaseId" value="@Model.Id" />
             <input type="hidden" name="ApprovalType" value="@approvalType.Value" />
@@ -74,7 +88,7 @@
                 <textarea id="approval-comment" name="Comment" class="form-control" rows="3"></textarea>
             </div>
             <div class="d-flex flex-wrap gap-2">
-                <button type="submit" name="Decision" value="@ApprovalStatus.Approved" class="btn btn-success">Approve</button>
+                <button type="submit" name="Decision" value="@ApprovalStatus.Approved" class="btn btn-success">Approve (back to RM)</button>
                 <button type="submit" name="Decision" value="@ApprovalStatus.ChangesRequired" class="btn btn-warning">Request changes</button>
                 <button type="submit" name="Decision" value="@ApprovalStatus.Rejected" class="btn btn-danger">Reject</button>
             </div>
@@ -168,13 +182,41 @@
         <div class="tab-pane fade" id="comments">
             <form asp-action="AddComment" method="post" class="mb-4">
                 <input type="hidden" name="ReleaseId" value="@Model.Id" />
-                <label for="new-comment" class="form-label">Add comment</label>
-                <textarea id="new-comment" name="Comment" class="form-control mb-2" rows="3" required></textarea>
+                <label for="new-comment" class="form-label">Start dialogue</label>
+                <textarea id="new-comment" name="Comment" class="form-control mb-2" rows="3" required placeholder="Write a message to the team…"></textarea>
                 <button type="submit" class="btn btn-accent">Post comment</button>
             </form>
-            @foreach (var item in Model.Comments)
+            @if (!rootComments.Any())
             {
-                <div class="border-top py-3"><strong>@item.Author</strong><span class="text-muted small ms-2">@item.CreatedDate.ToLocalTime().ToString("g")</span><p class="mb-0 mt-1" style="white-space: pre-wrap">@item.Comment</p></div>
+                <p class="text-muted">No comments yet. Start the dialogue above.</p>
+            }
+            @foreach (var item in rootComments)
+            {
+                <div class="border rounded p-3 mb-3">
+                    <div><strong>@item.Author</strong><span class="text-muted small ms-2">@item.CreatedDate.ToLocalTime().ToString("g")</span></div>
+                    <p class="mb-2 mt-1" style="white-space: pre-wrap">@item.Comment</p>
+                    @if (repliesByParent.TryGetValue(item.Id, out var replies))
+                    {
+                        <div class="ms-3 border-start ps-3">
+                            @foreach (var reply in replies)
+                            {
+                                <div class="py-2">
+                                    <strong>@reply.Author</strong>
+                                    <span class="text-muted small ms-2">@reply.CreatedDate.ToLocalTime().ToString("g")</span>
+                                    <p class="mb-0 mt-1" style="white-space: pre-wrap">@reply.Comment</p>
+                                </div>
+                            }
+                        </div>
+                    }
+                    <form asp-action="AddComment" method="post" class="mt-2">
+                        <input type="hidden" name="ReleaseId" value="@Model.Id" />
+                        <input type="hidden" name="ParentCommentId" value="@item.Id" />
+                        <div class="input-group input-group-sm">
+                            <input type="text" name="Comment" class="form-control" placeholder="Reply…" required maxlength="4000" />
+                            <button type="submit" class="btn btn-outline-secondary">Reply</button>
+                        </div>
+                    </form>
+                </div>
             }
         </div>
         <div class="tab-pane fade" id="attachments">

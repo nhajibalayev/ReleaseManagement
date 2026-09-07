@@ -92,6 +92,9 @@ public sealed class DevelopmentDataSeeder
             ("pentest", "Pentest User", "pentest@local.test", RoleNames.Pentest),
             ("infosec", "InfoSec User", "infosec@local.test", RoleNames.InfoSec),
             ("business", "Business Approver", "business@local.test", RoleNames.BusinessApprover),
+            ("qa", "QA User", "qa@local.test", RoleNames.QA),
+            ("risk", "Risk User", "risk@local.test", RoleNames.Risk),
+            ("chapterlead", "Chapter Lead", "chapterlead@local.test", RoleNames.ChapterLead),
             ("devops", "DevOps User", "devops@local.test", RoleNames.DevOps),
             ("auditor", "Auditor", "auditor@local.test", RoleNames.Auditor)
         };

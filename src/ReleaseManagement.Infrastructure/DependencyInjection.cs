@@ -210,6 +210,15 @@ public static class DependencyInjection
                 AuthorizationPolicies.CanApproveBusiness,
                 policy => policy.RequireRole(RoleNames.BusinessApprover, RoleNames.Administrator));
             options.AddPolicy(
+                AuthorizationPolicies.CanPerformQaReview,
+                policy => policy.RequireRole(RoleNames.QA, RoleNames.Administrator));
+            options.AddPolicy(
+                AuthorizationPolicies.CanPerformRiskReview,
+                policy => policy.RequireRole(RoleNames.Risk, RoleNames.Administrator));
+            options.AddPolicy(
+                AuthorizationPolicies.CanPerformChapterLeadReview,
+                policy => policy.RequireRole(RoleNames.ChapterLead, RoleNames.Administrator));
+            options.AddPolicy(
                 AuthorizationPolicies.CanDeployRelease,
                 policy => policy.RequireRole(RoleNames.DevOps, RoleNames.Administrator));
             options.AddPolicy(

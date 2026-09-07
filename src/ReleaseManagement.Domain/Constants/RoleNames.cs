@@ -10,6 +10,9 @@ public static class RoleNames
     public const string BusinessApprover = "BusinessApprover";
     public const string DevOps = "DevOps";
     public const string Auditor = "Auditor";
+    public const string QA = "QA";
+    public const string Risk = "Risk";
+    public const string ChapterLead = "ChapterLead";
 
     public static IReadOnlySet<string> All { get; } =
         new HashSet<string>(StringComparer.OrdinalIgnoreCase)
@@ -21,6 +24,9 @@ public static class RoleNames
             InfoSec,
             BusinessApprover,
             DevOps,
-            Auditor
+            Auditor,
+            QA,
+            Risk,
+            ChapterLead
         };
 }

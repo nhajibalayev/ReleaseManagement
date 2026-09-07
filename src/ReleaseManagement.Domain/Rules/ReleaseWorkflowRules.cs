@@ -140,6 +140,7 @@ public static class ReleaseWorkflowRules
             RoleNames.ProductOwner,
             RoleNames.ReleaseManager);
 
+        // RM orchestrates: send to ONE structure, return to team, finish, or reject.
         Add(
             ReleaseStatus.ReleaseManagerReview,
             ReleaseStatus.ReturnedForRevision,
@@ -147,7 +148,27 @@ public static class ReleaseWorkflowRules
             RoleNames.ReleaseManager);
         Add(
             ReleaseStatus.ReleaseManagerReview,
-            ReleaseStatus.PentestReview,
+            ReleaseStatus.QaReview,
+            false,
+            RoleNames.ReleaseManager);
+        Add(
+            ReleaseStatus.ReleaseManagerReview,
+            ReleaseStatus.InfoSecReview,
+            false,
+            RoleNames.ReleaseManager);
+        Add(
+            ReleaseStatus.ReleaseManagerReview,
+            ReleaseStatus.RiskReview,
+            false,
+            RoleNames.ReleaseManager);
+        Add(
+            ReleaseStatus.ReleaseManagerReview,
+            ReleaseStatus.ChapterLeadReview,
+            false,
+            RoleNames.ReleaseManager);
+        Add(
+            ReleaseStatus.ReleaseManagerReview,
+            ReleaseStatus.Approved,
             false,
             RoleNames.ReleaseManager);
         Add(
@@ -173,51 +194,32 @@ public static class ReleaseWorkflowRules
             RoleNames.ProductOwner,
             RoleNames.ReleaseManager);
 
-        Add(
-            ReleaseStatus.PentestReview,
-            ReleaseStatus.InfoSecReview,
-            false,
-            RoleNames.Pentest);
-        Add(
-            ReleaseStatus.PentestReview,
-            ReleaseStatus.PentestChangesRequired,
-            true,
-            RoleNames.Pentest);
-        Add(
-            ReleaseStatus.PentestReview,
-            ReleaseStatus.Rejected,
-            true,
-            RoleNames.Pentest);
-        Add(
-            ReleaseStatus.PentestChangesRequired,
-            ReleaseStatus.PentestReview,
-            false,
-            RoleNames.ProductOwner);
-
-        Add(
-            ReleaseStatus.InfoSecReview,
-            ReleaseStatus.BusinessApproval,
-            false,
-            RoleNames.InfoSec);
-        Add(
+        // Each structure: approve → back to RM; changes → team; reject → rejected.
+        AddStructureReview(
+            ReleaseStatus.QaReview,
+            ReleaseStatus.QaChangesRequired,
+            RoleNames.QA);
+        AddStructureReview(
             ReleaseStatus.InfoSecReview,
             ReleaseStatus.InfoSecChangesRequired,
-            true,
             RoleNames.InfoSec);
-        Add(
-            ReleaseStatus.InfoSecReview,
-            ReleaseStatus.Rejected,
-            true,
-            RoleNames.InfoSec);
-        Add(
-            ReleaseStatus.InfoSecChangesRequired,
-            ReleaseStatus.InfoSecReview,
-            false,
-            RoleNames.ProductOwner);
+        AddStructureReview(
+            ReleaseStatus.RiskReview,
+            ReleaseStatus.RiskChangesRequired,
+            RoleNames.Risk);
+        AddStructureReview(
+            ReleaseStatus.ChapterLeadReview,
+            ReleaseStatus.ChapterLeadChangesRequired,
+            RoleNames.ChapterLead);
 
+        // Legacy pentest/business kept for older releases in DB.
+        AddStructureReview(
+            ReleaseStatus.PentestReview,
+            ReleaseStatus.PentestChangesRequired,
+            RoleNames.Pentest);
         Add(
             ReleaseStatus.BusinessApproval,
-            ReleaseStatus.Approved,
+            ReleaseStatus.ReleaseManagerReview,
             false,
             RoleNames.BusinessApprover);
         Add(
@@ -286,6 +288,18 @@ public static class ReleaseWorkflowRules
         return transitions.ToDictionary(
             pair => pair.Key,
             pair => (IReadOnlyCollection<WorkflowTransition>)pair.Value.AsReadOnly());
+
+        void AddStructureReview(
+            ReleaseStatus review,
+            ReleaseStatus changesRequired,
+            string role)
+        {
+            Add(review, ReleaseStatus.ReleaseManagerReview, false, role);
+            Add(review, changesRequired, true, role);
+            Add(review, ReleaseStatus.Rejected, true, role);
+            Add(changesRequired, review, false, RoleNames.ProductOwner);
+            Add(changesRequired, ReleaseStatus.ReturnedForRevision, true, RoleNames.ProductOwner);
+        }
 
         void Add(
             ReleaseStatus from,
