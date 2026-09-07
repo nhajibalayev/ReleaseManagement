@@ -81,4 +81,24 @@ public sealed class AzureDevOpsReleaseSyncService : IAzureDevOpsReleaseSyncServi
         var accessToken = await _tokenProvider.GetAccessTokenAsync(cancellationToken);
         await _azureDevOps.UpdateReleaseWorkItemAsync(release, accessToken, cancellationToken);
     }
+
+    public async Task AddCommentIfNeededAsync(
+        Release release,
+        string comment,
+        CancellationToken cancellationToken = default)
+    {
+        if (!_options.Enabled ||
+            !release.AzureDevOpsWorkItemId.HasValue ||
+            string.IsNullOrWhiteSpace(comment))
+        {
+            return;
+        }
+
+        var accessToken = await _tokenProvider.GetAccessTokenAsync(cancellationToken);
+        await _azureDevOps.AddCommentAsync(
+            release.AzureDevOpsWorkItemId.Value,
+            comment,
+            accessToken,
+            cancellationToken);
+    }
 }

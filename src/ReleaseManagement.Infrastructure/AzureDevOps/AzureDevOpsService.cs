@@ -149,6 +149,61 @@ public sealed class AzureDevOpsService : IAzureDevOpsService
     {
         EnsureConfigured();
 
+        // Discussion panel uses the Comments API; System.History only appears in History.
+        if (await TryAddDiscussionCommentAsync(workItemId, comment, accessToken, cancellationToken))
+        {
+            return;
+        }
+
+        await AddHistoryCommentAsync(workItemId, comment, accessToken, cancellationToken);
+    }
+
+    private async Task<bool> TryAddDiscussionCommentAsync(
+        int workItemId,
+        string comment,
+        string? accessToken,
+        CancellationToken cancellationToken)
+    {
+        var payload = JsonSerializer.Serialize(new { text = comment });
+        var commentsApiVersion = ResolveCommentsApiVersion(_options.ApiVersion);
+        var url =
+            $"{_options.OrganizationUrl.TrimEnd('/')}/{_options.Project}/_apis/wit/workItems/{workItemId}/comments?api-version={commentsApiVersion}";
+
+        using var request = new HttpRequestMessage(HttpMethod.Post, url)
+        {
+            Content = new StringContent(payload, Encoding.UTF8, "application/json")
+        };
+
+        await ApplyAuthorizationAsync(request, accessToken, cancellationToken);
+
+        using var response = await _httpClient.SendAsync(request, cancellationToken);
+        if (response.IsSuccessStatusCode)
+        {
+            return true;
+        }
+
+        var body = await response.Content.ReadAsStringAsync(cancellationToken);
+        _logger.LogWarning(
+            "Azure DevOps Discussion comment API failed ({StatusCode}). Falling back to History. Body={Body}",
+            (int)response.StatusCode,
+            body);
+
+        // 404/400 often mean older Server build without Comments API — fall back.
+        if ((int)response.StatusCode is 400 or 404 or 405)
+        {
+            return false;
+        }
+
+        throw new InvalidOperationException(
+            $"Azure DevOps comment failed with status {(int)response.StatusCode}: {body}");
+    }
+
+    private async Task AddHistoryCommentAsync(
+        int workItemId,
+        string comment,
+        string? accessToken,
+        CancellationToken cancellationToken)
+    {
         var document = new object[]
         {
             new { op = "add", path = "/fields/System.History", value = comment }
@@ -167,7 +222,29 @@ public sealed class AzureDevOpsService : IAzureDevOpsService
         await ApplyAuthorizationAsync(request, accessToken, cancellationToken);
 
         using var response = await _httpClient.SendAsync(request, cancellationToken);
-        response.EnsureSuccessStatusCode();
+        if (!response.IsSuccessStatusCode)
+        {
+            var body = await response.Content.ReadAsStringAsync(cancellationToken);
+            throw new InvalidOperationException(
+                $"Azure DevOps history comment failed with status {(int)response.StatusCode}: {body}");
+        }
+    }
+
+    private static string ResolveCommentsApiVersion(string configuredVersion)
+    {
+        if (string.IsNullOrWhiteSpace(configuredVersion))
+        {
+            return "6.0-preview.3";
+        }
+
+        var version = configuredVersion.Trim();
+        if (version.Contains("preview", StringComparison.OrdinalIgnoreCase))
+        {
+            return version;
+        }
+
+        // Comments API is preview on Azure DevOps Server / Services.
+        return $"{version}-preview.3";
     }
 
     public async Task<IReadOnlyCollection<AzureDevOpsWorkItemDto>> GetLinkedWorkItemsAsync(

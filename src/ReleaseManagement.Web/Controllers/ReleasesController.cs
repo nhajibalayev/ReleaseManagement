@@ -23,6 +23,8 @@ public sealed class ReleasesController : Controller
     private readonly IClock _clock;
     private readonly IFileStorageService _fileStorage;
     private readonly IAuditService _audit;
+    private readonly IAzureDevOpsReleaseSyncService _azureDevOpsSync;
+    private readonly ILogger<ReleasesController> _logger;
 
     public ReleasesController(
         IReleaseAppService releaseAppService,
@@ -32,7 +34,9 @@ public sealed class ReleasesController : Controller
         ICurrentUserService currentUser,
         IClock clock,
         IFileStorageService fileStorage,
-        IAuditService audit)
+        IAuditService audit,
+        IAzureDevOpsReleaseSyncService azureDevOpsSync,
+        ILogger<ReleasesController> logger)
     {
         _releaseAppService = releaseAppService;
         _workflowService = workflowService;
@@ -42,6 +46,8 @@ public sealed class ReleasesController : Controller
         _clock = clock;
         _fileStorage = fileStorage;
         _audit = audit;
+        _azureDevOpsSync = azureDevOpsSync;
+        _logger = logger;
     }
 
     [HttpGet]
@@ -295,7 +301,36 @@ public sealed class ReleasesController : Controller
             cancellationToken);
         await _dbContext.SaveChangesAsync(cancellationToken);
 
-        TempData["Success"] = "Comment added.";
+        var release = await _dbContext.Releases
+            .AsNoTracking()
+            .SingleOrDefaultAsync(item => item.Id == model.ReleaseId, cancellationToken);
+
+        if (release is not null)
+        {
+            try
+            {
+                var adoText = string.IsNullOrWhiteSpace(_currentUser.UserName)
+                    ? model.Comment
+                    : $"{_currentUser.UserName}:\n{model.Comment}";
+
+                await _azureDevOpsSync.AddCommentIfNeededAsync(release, adoText, cancellationToken);
+                TempData["Success"] = "Comment added and synced to Azure DevOps Discussion.";
+            }
+            catch (Exception exception)
+            {
+                _logger.LogWarning(
+                    exception,
+                    "Comment saved locally but Azure DevOps Discussion sync failed for release {ReleaseId}",
+                    model.ReleaseId);
+                TempData["Success"] = "Comment added.";
+                TempData["Error"] = $"Azure DevOps Discussion sync failed: {exception.Message}";
+            }
+        }
+        else
+        {
+            TempData["Success"] = "Comment added.";
+        }
+
         return RedirectToAction(nameof(Details), new { id = model.ReleaseId });
     }
 

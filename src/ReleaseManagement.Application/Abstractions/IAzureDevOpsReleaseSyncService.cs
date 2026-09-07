@@ -12,4 +12,9 @@ public interface IAzureDevOpsReleaseSyncService
     Task CreateWorkItemIfNeededAsync(Release release, CancellationToken cancellationToken = default);
 
     Task UpdateWorkItemIfNeededAsync(Release release, CancellationToken cancellationToken = default);
+
+    Task AddCommentIfNeededAsync(
+        Release release,
+        string comment,
+        CancellationToken cancellationToken = default);
 }
