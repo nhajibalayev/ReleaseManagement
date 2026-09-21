@@ -7,6 +7,7 @@
             <th>Release</th>
             <th>Product</th>
             <th>Version</th>
+            <th>Category / mode</th>
             <th>Planned date</th>
             <th>Status</th>
             <th>Responsible</th>
@@ -25,6 +26,7 @@
                 </td>
                 <td>@(release.ProductName ?? "—")</td>
                 <td>@(string.IsNullOrWhiteSpace(release.ReleaseVersion) ? "—" : release.ReleaseVersion)</td>
+                <td><span class="status-badge @(release.Category == ReleaseCategory.Major ? "danger" : "")">@release.Category</span> <span class="status-badge @(release.ExecutionMode == ExecutionMode.Expedited ? "danger" : "")">@release.ExecutionMode</span></td>
                 <td>@release.PlannedReleaseDate.ToLocalTime().ToString("g")</td>
                 <td>
                     <span class="status-badge @(release.ActionRequiredFromCurrentUser ? "action" : "")">
@@ -39,7 +41,7 @@
         }
         @if (!Model.Any())
         {
-            <tr><td colspan="7" class="text-center text-muted py-4">No releases found.</td></tr>
+            <tr><td colspan="8" class="text-center text-muted py-4">No releases found.</td></tr>
         }
         </tbody>
     </table>

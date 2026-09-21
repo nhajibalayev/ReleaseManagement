@@ -424,6 +424,93 @@ namespace ReleaseManagement.Infrastructure.Persistence.Migrations
                     b.ToTable("DeploymentRecords", (string)null);
                 });
 
+            modelBuilder.Entity("ReleaseManagement.Domain.Entities.FreezeException", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("ApprovedBy")
+                        .IsRequired()
+                        .HasMaxLength(300)
+                        .HasColumnType("character varying(300)");
+
+                    b.Property<DateTime>("ApprovedDate")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<Guid>("FreezePeriodId")
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("Justification")
+                        .IsRequired()
+                        .HasMaxLength(4000)
+                        .HasColumnType("character varying(4000)");
+
+                    b.Property<Guid>("RecordedByUserId")
+                        .HasColumnType("uuid");
+
+                    b.Property<Guid>("ReleaseId")
+                        .HasColumnType("uuid");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("RecordedByUserId");
+
+                    b.HasIndex("ReleaseId");
+
+                    b.HasIndex("FreezePeriodId", "ReleaseId")
+                        .IsUnique();
+
+                    b.ToTable("FreezeExceptions", (string)null);
+                });
+
+            modelBuilder.Entity("ReleaseManagement.Domain.Entities.FreezePeriod", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("Authority")
+                        .IsRequired()
+                        .HasMaxLength(300)
+                        .HasColumnType("character varying(300)");
+
+                    b.Property<Guid>("CreatedByUserId")
+                        .HasColumnType("uuid");
+
+                    b.Property<DateTime>("CreatedDate")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("Description")
+                        .HasMaxLength(2000)
+                        .HasColumnType("character varying(2000)");
+
+                    b.Property<DateTime>("EndDate")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<int>("FreezeType")
+                        .HasColumnType("integer");
+
+                    b.Property<bool>("IsActive")
+                        .HasColumnType("boolean");
+
+                    b.Property<string>("Name")
+                        .IsRequired()
+                        .HasMaxLength(200)
+                        .HasColumnType("character varying(200)");
+
+                    b.Property<DateTime>("StartDate")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("CreatedByUserId");
+
+                    b.HasIndex("IsActive", "StartDate", "EndDate");
+
+                    b.ToTable("FreezePeriods", (string)null);
+                });
+
             modelBuilder.Entity("ReleaseManagement.Domain.Entities.Notification", b =>
                 {
                     b.Property<Guid>("Id")
@@ -473,6 +560,173 @@ namespace ReleaseManagement.Infrastructure.Persistence.Migrations
                     b.ToTable("Notifications", (string)null);
                 });
 
+            modelBuilder.Entity("ReleaseManagement.Domain.Entities.PirAction", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid");
+
+                    b.Property<DateTime?>("CompletedDate")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("Description")
+                        .IsRequired()
+                        .HasMaxLength(2000)
+                        .HasColumnType("character varying(2000)");
+
+                    b.Property<bool>("IsCompleted")
+                        .HasColumnType("boolean");
+
+                    b.Property<string>("OwnerName")
+                        .IsRequired()
+                        .HasMaxLength(200)
+                        .HasColumnType("character varying(200)");
+
+                    b.Property<Guid>("PostImplementationReviewId")
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("Reference")
+                        .HasMaxLength(2048)
+                        .HasColumnType("character varying(2048)");
+
+                    b.Property<DateTime>("TargetDate")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("PostImplementationReviewId");
+
+                    b.ToTable("PirActions", (string)null);
+                });
+
+            modelBuilder.Entity("ReleaseManagement.Domain.Entities.PostImplementationReview", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("BacklogReference")
+                        .HasMaxLength(2048)
+                        .HasColumnType("character varying(2048)");
+
+                    b.Property<Guid?>("CompletedByUserId")
+                        .HasColumnType("uuid");
+
+                    b.Property<DateTime?>("CompletedDate")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<Guid>("CreatedByUserId")
+                        .HasColumnType("uuid");
+
+                    b.Property<DateTime>("CreatedDate")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<int>("Format")
+                        .HasColumnType("integer");
+
+                    b.Property<string>("LessonsLearned")
+                        .HasMaxLength(8000)
+                        .HasColumnType("character varying(8000)");
+
+                    b.Property<Guid>("ReleaseId")
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("RootCause")
+                        .HasMaxLength(8000)
+                        .HasColumnType("character varying(8000)");
+
+                    b.Property<int>("Status")
+                        .HasColumnType("integer");
+
+                    b.Property<int>("Triggers")
+                        .HasColumnType("integer");
+
+                    b.Property<DateTime>("UpdatedDate")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("CompletedByUserId");
+
+                    b.HasIndex("CreatedByUserId");
+
+                    b.HasIndex("ReleaseId")
+                        .IsUnique();
+
+                    b.HasIndex("Status");
+
+                    b.ToTable("PostImplementationReviews", (string)null);
+                });
+
+            modelBuilder.Entity("ReleaseManagement.Domain.Entities.PostReleaseValidation", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("BusinessNotes")
+                        .HasMaxLength(4000)
+                        .HasColumnType("character varying(4000)");
+
+                    b.Property<int>("BusinessResult")
+                        .HasColumnType("integer");
+
+                    b.Property<Guid?>("BusinessValidatedByUserId")
+                        .HasColumnType("uuid");
+
+                    b.Property<DateTime?>("BusinessValidatedDate")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<bool>("BusinessValidationRequired")
+                        .HasColumnType("boolean");
+
+                    b.Property<DateTime>("CreatedDate")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<bool>("HealthCheckPassed")
+                        .HasColumnType("boolean");
+
+                    b.Property<bool>("MonitoringClean")
+                        .HasColumnType("boolean");
+
+                    b.Property<bool>("RecoveryNeeded")
+                        .HasColumnType("boolean");
+
+                    b.Property<Guid>("ReleaseId")
+                        .HasColumnType("uuid");
+
+                    b.Property<bool>("SmokeTestPassed")
+                        .HasColumnType("boolean");
+
+                    b.Property<string>("TechnicalEvidenceReference")
+                        .HasMaxLength(2048)
+                        .HasColumnType("character varying(2048)");
+
+                    b.Property<string>("TechnicalNotes")
+                        .HasMaxLength(4000)
+                        .HasColumnType("character varying(4000)");
+
+                    b.Property<int>("TechnicalResult")
+                        .HasColumnType("integer");
+
+                    b.Property<Guid?>("TechnicalValidatedByUserId")
+                        .HasColumnType("uuid");
+
+                    b.Property<DateTime?>("TechnicalValidatedDate")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("BusinessValidatedByUserId");
+
+                    b.HasIndex("ReleaseId")
+                        .IsUnique();
+
+                    b.HasIndex("TechnicalValidatedByUserId");
+
+                    b.ToTable("PostReleaseValidations", (string)null);
+                });
+
             modelBuilder.Entity("ReleaseManagement.Domain.Entities.Product", b =>
                 {
                     b.Property<Guid>("Id")
@@ -514,6 +768,55 @@ namespace ReleaseManagement.Infrastructure.Persistence.Migrations
                     b.ToTable("Products", (string)null);
                 });
 
+            modelBuilder.Entity("ReleaseManagement.Domain.Entities.ReadinessControl", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid");
+
+                    b.Property<int>("ControlType")
+                        .HasColumnType("integer");
+
+                    b.Property<string>("EvidenceReference")
+                        .HasMaxLength(2048)
+                        .HasColumnType("character varying(2048)");
+
+                    b.Property<bool>("IsRequired")
+                        .HasColumnType("boolean");
+
+                    b.Property<string>("Justification")
+                        .HasMaxLength(4000)
+                        .HasColumnType("character varying(4000)");
+
+                    b.Property<string>("OwnerRole")
+                        .IsRequired()
+                        .HasMaxLength(100)
+                        .HasColumnType("character varying(100)");
+
+                    b.Property<Guid>("ReleaseId")
+                        .HasColumnType("uuid");
+
+                    b.Property<int>("Status")
+                        .HasColumnType("integer");
+
+                    b.Property<Guid?>("UpdatedByUserId")
+                        .HasColumnType("uuid");
+
+                    b.Property<DateTime>("UpdatedDate")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("UpdatedByUserId");
+
+                    b.HasIndex("ReleaseId", "ControlType")
+                        .IsUnique();
+
+                    b.HasIndex("Status", "IsRequired");
+
+                    b.ToTable("ReadinessControls", (string)null);
+                });
+
             modelBuilder.Entity("ReleaseManagement.Domain.Entities.Release", b =>
                 {
                     b.Property<Guid>("Id")
@@ -521,6 +824,12 @@ namespace ReleaseManagement.Infrastructure.Persistence.Migrations
                         .HasColumnType("uuid");
 
                     b.Property<DateTime?>("ActualReleaseDate")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<DateTime?>("ActualWindowEnd")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<DateTime?>("ActualWindowStart")
                         .HasColumnType("timestamp with time zone");
 
                     b.Property<int?>("AzureDevOpsWorkItemId")
@@ -534,6 +843,12 @@ namespace ReleaseManagement.Infrastructure.Persistence.Migrations
                         .IsRequired()
                         .HasMaxLength(2000)
                         .HasColumnType("character varying(2000)");
+
+                    b.Property<int>("Category")
+                        .HasColumnType("integer");
+
+                    b.Property<int>("ClassificationCriteria")
+                        .HasColumnType("integer");
 
                     b.Property<DateTime?>("ClosedDate")
                         .HasColumnType("timestamp with time zone");
@@ -564,26 +879,68 @@ namespace ReleaseManagement.Infrastructure.Persistence.Migrations
                         .HasMaxLength(4000)
                         .HasColumnType("character varying(4000)");
 
+                    b.Property<string>("DirectorApprovalReference")
+                        .HasMaxLength(500)
+                        .HasColumnType("character varying(500)");
+
                     b.Property<bool>("DowntimeRequired")
                         .HasColumnType("boolean");
 
                     b.Property<Guid>("EnvironmentId")
                         .HasColumnType("uuid");
 
+                    b.Property<int>("ExecutionMode")
+                        .HasColumnType("integer");
+
                     b.Property<int?>("ExpectedDowntimeMinutes")
                         .HasColumnType("integer");
+
+                    b.Property<string>("ExpeditedJustification")
+                        .HasMaxLength(2000)
+                        .HasColumnType("character varying(2000)");
+
+                    b.Property<Guid?>("ForecastId")
+                        .HasColumnType("uuid");
 
                     b.Property<string>("ImpactDescription")
                         .IsRequired()
                         .HasMaxLength(4000)
                         .HasColumnType("character varying(4000)");
 
+                    b.Property<string>("KeyDependencies")
+                        .IsRequired()
+                        .HasMaxLength(2000)
+                        .HasColumnType("character varying(2000)");
+
+                    b.Property<string>("MaintenanceApprovalReference")
+                        .HasMaxLength(500)
+                        .HasColumnType("character varying(500)");
+
                     b.Property<string>("MonitoringPlan")
                         .IsRequired()
                         .HasMaxLength(4000)
                         .HasColumnType("character varying(4000)");
 
+                    b.Property<bool>("OperationalImpact")
+                        .HasColumnType("boolean");
+
+                    b.Property<int?>("Outcome")
+                        .HasColumnType("integer");
+
+                    b.Property<string>("OutcomeNotes")
+                        .HasMaxLength(4000)
+                        .HasColumnType("character varying(4000)");
+
+                    b.Property<bool>("PlannedMaintenance")
+                        .HasColumnType("boolean");
+
                     b.Property<DateTime>("PlannedReleaseDate")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<DateTime>("PlannedWindowEnd")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<DateTime>("PlannedWindowStart")
                         .HasColumnType("timestamp with time zone");
 
                     b.Property<string>("PostReleaseValidationPlan")
@@ -595,6 +952,22 @@ namespace ReleaseManagement.Infrastructure.Persistence.Migrations
                         .HasColumnType("integer");
 
                     b.Property<Guid>("ProductId")
+                        .HasColumnType("uuid");
+
+                    b.Property<int>("RecoveryApproach")
+                        .HasColumnType("integer");
+
+                    b.Property<string>("RecoveryDecisionPoints")
+                        .IsRequired()
+                        .HasMaxLength(4000)
+                        .HasColumnType("character varying(4000)");
+
+                    b.Property<string>("RecoveryResponsibleParties")
+                        .IsRequired()
+                        .HasMaxLength(1000)
+                        .HasColumnType("character varying(1000)");
+
+                    b.Property<Guid?>("ReleaseManagerUserId")
                         .HasColumnType("uuid");
 
                     b.Property<string>("ReleaseNumber")
@@ -623,8 +996,24 @@ namespace ReleaseManagement.Infrastructure.Persistence.Migrations
                         .HasMaxLength(8000)
                         .HasColumnType("character varying(8000)");
 
+                    b.Property<int>("SecurityTriggers")
+                        .HasColumnType("integer");
+
+                    b.Property<DateTime?>("StabilizationEnd")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("StabilizationNotes")
+                        .HasMaxLength(2000)
+                        .HasColumnType("character varying(2000)");
+
+                    b.Property<DateTime?>("StabilizationStart")
+                        .HasColumnType("timestamp with time zone");
+
                     b.Property<DateTime?>("SubmittedDate")
                         .HasColumnType("timestamp with time zone");
+
+                    b.Property<Guid?>("TechnicalOwnerUserId")
+                        .HasColumnType("uuid");
 
                     b.Property<string>("TestingSummary")
                         .IsRequired()
@@ -636,10 +1025,15 @@ namespace ReleaseManagement.Infrastructure.Persistence.Migrations
                         .HasMaxLength(200)
                         .HasColumnType("character varying(200)");
 
+                    b.Property<int>("Track")
+                        .HasColumnType("integer");
+
                     b.Property<DateTime>("UpdatedDate")
                         .HasColumnType("timestamp with time zone");
 
                     b.HasKey("Id");
+
+                    b.HasIndex("Category");
 
                     b.HasIndex("CreatedByUserId");
 
@@ -649,12 +1043,18 @@ namespace ReleaseManagement.Infrastructure.Persistence.Migrations
 
                     b.HasIndex("EnvironmentId");
 
+                    b.HasIndex("ForecastId");
+
                     b.HasIndex("PlannedReleaseDate");
 
                     b.HasIndex("ProductId");
 
+                    b.HasIndex("ReleaseManagerUserId");
+
                     b.HasIndex("ReleaseNumber")
                         .IsUnique();
+
+                    b.HasIndex("TechnicalOwnerUserId");
 
                     b.ToTable("Releases", (string)null);
                 });
@@ -802,6 +1202,155 @@ namespace ReleaseManagement.Infrastructure.Persistence.Migrations
                     b.HasIndex("ReleaseId", "CreatedDate");
 
                     b.ToTable("ReleaseComments", (string)null);
+                });
+
+            modelBuilder.Entity("ReleaseManagement.Domain.Entities.ReleaseCommunication", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("Audience")
+                        .IsRequired()
+                        .HasMaxLength(500)
+                        .HasColumnType("character varying(500)");
+
+                    b.Property<string>("Channel")
+                        .IsRequired()
+                        .HasMaxLength(200)
+                        .HasColumnType("character varying(200)");
+
+                    b.Property<int>("CommunicationType")
+                        .HasColumnType("integer");
+
+                    b.Property<string>("Message")
+                        .IsRequired()
+                        .HasMaxLength(4000)
+                        .HasColumnType("character varying(4000)");
+
+                    b.Property<Guid>("ReleaseId")
+                        .HasColumnType("uuid");
+
+                    b.Property<Guid>("SentByUserId")
+                        .HasColumnType("uuid");
+
+                    b.Property<DateTime>("SentDate")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("SentByUserId");
+
+                    b.HasIndex("ReleaseId", "SentDate");
+
+                    b.ToTable("ReleaseCommunications", (string)null);
+                });
+
+            modelBuilder.Entity("ReleaseManagement.Domain.Entities.ReleaseForecast", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid");
+
+                    b.Property<int>("Category")
+                        .HasColumnType("integer");
+
+                    b.Property<Guid>("CreatedByUserId")
+                        .HasColumnType("uuid");
+
+                    b.Property<DateTime>("CreatedDate")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("Dependencies")
+                        .HasMaxLength(2000)
+                        .HasColumnType("character varying(2000)");
+
+                    b.Property<DateTime?>("ExpectedDate")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("Notes")
+                        .HasMaxLength(4000)
+                        .HasColumnType("character varying(4000)");
+
+                    b.Property<Guid>("ProductId")
+                        .HasColumnType("uuid");
+
+                    b.Property<int>("Quarter")
+                        .HasColumnType("integer");
+
+                    b.Property<Guid?>("ReleaseId")
+                        .HasColumnType("uuid");
+
+                    b.Property<int>("Status")
+                        .HasColumnType("integer");
+
+                    b.Property<string>("Team")
+                        .IsRequired()
+                        .HasMaxLength(200)
+                        .HasColumnType("character varying(200)");
+
+                    b.Property<string>("Title")
+                        .IsRequired()
+                        .HasMaxLength(200)
+                        .HasColumnType("character varying(200)");
+
+                    b.Property<DateTime>("UpdatedDate")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<int>("Year")
+                        .HasColumnType("integer");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("CreatedByUserId");
+
+                    b.HasIndex("ProductId");
+
+                    b.HasIndex("ReleaseId");
+
+                    b.HasIndex("Year", "Quarter");
+
+                    b.ToTable("ReleaseForecasts", (string)null);
+                });
+
+            modelBuilder.Entity("ReleaseManagement.Domain.Entities.ReleaseReference", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid");
+
+                    b.Property<Guid>("AddedByUserId")
+                        .HasColumnType("uuid");
+
+                    b.Property<DateTime>("AddedDate")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("ExternalId")
+                        .IsRequired()
+                        .HasMaxLength(200)
+                        .HasColumnType("character varying(200)");
+
+                    b.Property<int>("ReferenceType")
+                        .HasColumnType("integer");
+
+                    b.Property<Guid>("ReleaseId")
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("Title")
+                        .HasMaxLength(500)
+                        .HasColumnType("character varying(500)");
+
+                    b.Property<string>("Url")
+                        .HasMaxLength(2048)
+                        .HasColumnType("character varying(2048)");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("AddedByUserId");
+
+                    b.HasIndex("ReleaseId", "ReferenceType");
+
+                    b.ToTable("ReleaseReferences", (string)null);
                 });
 
             modelBuilder.Entity("ReleaseManagement.Domain.Entities.ReleaseService", b =>
@@ -1266,6 +1815,36 @@ namespace ReleaseManagement.Infrastructure.Persistence.Migrations
                         .IsRequired();
                 });
 
+            modelBuilder.Entity("ReleaseManagement.Domain.Entities.FreezeException", b =>
+                {
+                    b.HasOne("ReleaseManagement.Domain.Entities.FreezePeriod", null)
+                        .WithMany("Exceptions")
+                        .HasForeignKey("FreezePeriodId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.HasOne("ReleaseManagement.Domain.Entities.ApplicationUser", null)
+                        .WithMany()
+                        .HasForeignKey("RecordedByUserId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("ReleaseManagement.Domain.Entities.Release", null)
+                        .WithMany()
+                        .HasForeignKey("ReleaseId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+                });
+
+            modelBuilder.Entity("ReleaseManagement.Domain.Entities.FreezePeriod", b =>
+                {
+                    b.HasOne("ReleaseManagement.Domain.Entities.ApplicationUser", null)
+                        .WithMany()
+                        .HasForeignKey("CreatedByUserId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+                });
+
             modelBuilder.Entity("ReleaseManagement.Domain.Entities.Notification", b =>
                 {
                     b.HasOne("ReleaseManagement.Domain.Entities.Release", null)
@@ -1278,6 +1857,68 @@ namespace ReleaseManagement.Infrastructure.Persistence.Migrations
                         .HasForeignKey("UserId")
                         .OnDelete(DeleteBehavior.Restrict)
                         .IsRequired();
+                });
+
+            modelBuilder.Entity("ReleaseManagement.Domain.Entities.PirAction", b =>
+                {
+                    b.HasOne("ReleaseManagement.Domain.Entities.PostImplementationReview", null)
+                        .WithMany("Actions")
+                        .HasForeignKey("PostImplementationReviewId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+                });
+
+            modelBuilder.Entity("ReleaseManagement.Domain.Entities.PostImplementationReview", b =>
+                {
+                    b.HasOne("ReleaseManagement.Domain.Entities.ApplicationUser", null)
+                        .WithMany()
+                        .HasForeignKey("CompletedByUserId")
+                        .OnDelete(DeleteBehavior.Restrict);
+
+                    b.HasOne("ReleaseManagement.Domain.Entities.ApplicationUser", null)
+                        .WithMany()
+                        .HasForeignKey("CreatedByUserId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("ReleaseManagement.Domain.Entities.Release", null)
+                        .WithMany()
+                        .HasForeignKey("ReleaseId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+                });
+
+            modelBuilder.Entity("ReleaseManagement.Domain.Entities.PostReleaseValidation", b =>
+                {
+                    b.HasOne("ReleaseManagement.Domain.Entities.ApplicationUser", null)
+                        .WithMany()
+                        .HasForeignKey("BusinessValidatedByUserId")
+                        .OnDelete(DeleteBehavior.Restrict);
+
+                    b.HasOne("ReleaseManagement.Domain.Entities.Release", null)
+                        .WithMany()
+                        .HasForeignKey("ReleaseId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("ReleaseManagement.Domain.Entities.ApplicationUser", null)
+                        .WithMany()
+                        .HasForeignKey("TechnicalValidatedByUserId")
+                        .OnDelete(DeleteBehavior.Restrict);
+                });
+
+            modelBuilder.Entity("ReleaseManagement.Domain.Entities.ReadinessControl", b =>
+                {
+                    b.HasOne("ReleaseManagement.Domain.Entities.Release", null)
+                        .WithMany("ReadinessControls")
+                        .HasForeignKey("ReleaseId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.HasOne("ReleaseManagement.Domain.Entities.ApplicationUser", null)
+                        .WithMany()
+                        .HasForeignKey("UpdatedByUserId")
+                        .OnDelete(DeleteBehavior.Restrict);
                 });
 
             modelBuilder.Entity("ReleaseManagement.Domain.Entities.Release", b =>
@@ -1304,6 +1945,16 @@ namespace ReleaseManagement.Infrastructure.Persistence.Migrations
                         .HasForeignKey("ProductId")
                         .OnDelete(DeleteBehavior.Restrict)
                         .IsRequired();
+
+                    b.HasOne("ReleaseManagement.Domain.Entities.ApplicationUser", null)
+                        .WithMany()
+                        .HasForeignKey("ReleaseManagerUserId")
+                        .OnDelete(DeleteBehavior.Restrict);
+
+                    b.HasOne("ReleaseManagement.Domain.Entities.ApplicationUser", null)
+                        .WithMany()
+                        .HasForeignKey("TechnicalOwnerUserId")
+                        .OnDelete(DeleteBehavior.Restrict);
                 });
 
             modelBuilder.Entity("ReleaseManagement.Domain.Entities.ReleaseApproval", b =>
@@ -1357,6 +2008,56 @@ namespace ReleaseManagement.Infrastructure.Persistence.Migrations
                         .WithMany()
                         .HasForeignKey("UserId")
                         .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+                });
+
+            modelBuilder.Entity("ReleaseManagement.Domain.Entities.ReleaseCommunication", b =>
+                {
+                    b.HasOne("ReleaseManagement.Domain.Entities.Release", null)
+                        .WithMany("Communications")
+                        .HasForeignKey("ReleaseId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.HasOne("ReleaseManagement.Domain.Entities.ApplicationUser", null)
+                        .WithMany()
+                        .HasForeignKey("SentByUserId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+                });
+
+            modelBuilder.Entity("ReleaseManagement.Domain.Entities.ReleaseForecast", b =>
+                {
+                    b.HasOne("ReleaseManagement.Domain.Entities.ApplicationUser", null)
+                        .WithMany()
+                        .HasForeignKey("CreatedByUserId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("ReleaseManagement.Domain.Entities.Product", null)
+                        .WithMany()
+                        .HasForeignKey("ProductId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("ReleaseManagement.Domain.Entities.Release", null)
+                        .WithMany()
+                        .HasForeignKey("ReleaseId")
+                        .OnDelete(DeleteBehavior.SetNull);
+                });
+
+            modelBuilder.Entity("ReleaseManagement.Domain.Entities.ReleaseReference", b =>
+                {
+                    b.HasOne("ReleaseManagement.Domain.Entities.ApplicationUser", null)
+                        .WithMany()
+                        .HasForeignKey("AddedByUserId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("ReleaseManagement.Domain.Entities.Release", null)
+                        .WithMany("References")
+                        .HasForeignKey("ReleaseId")
+                        .OnDelete(DeleteBehavior.Cascade)
                         .IsRequired();
                 });
 
@@ -1443,6 +2144,16 @@ namespace ReleaseManagement.Infrastructure.Persistence.Migrations
                         .IsRequired();
                 });
 
+            modelBuilder.Entity("ReleaseManagement.Domain.Entities.FreezePeriod", b =>
+                {
+                    b.Navigation("Exceptions");
+                });
+
+            modelBuilder.Entity("ReleaseManagement.Domain.Entities.PostImplementationReview", b =>
+                {
+                    b.Navigation("Actions");
+                });
+
             modelBuilder.Entity("ReleaseManagement.Domain.Entities.Release", b =>
                 {
                     b.Navigation("Approvals");
@@ -1451,7 +2162,13 @@ namespace ReleaseManagement.Infrastructure.Persistence.Migrations
 
                     b.Navigation("Comments");
 
+                    b.Navigation("Communications");
+
                     b.Navigation("DeploymentRecords");
+
+                    b.Navigation("ReadinessControls");
+
+                    b.Navigation("References");
 
                     b.Navigation("Services");
 

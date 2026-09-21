@@ -128,6 +128,84 @@
     refreshRemoveButtons();
   }
 
+  // ---- Procedure v4.0: source links, category preview, expedited fields ----
+  const referencesGrid = document.getElementById("references-grid");
+  const addReferenceButton = document.getElementById("add-reference-row");
+  const referenceTemplate = document.getElementById("reference-row-template");
+
+  const reindexReferenceRows = () => {
+    if (!referencesGrid) {
+      return;
+    }
+
+    [...referencesGrid.querySelectorAll("[data-reference-row]")].forEach((row, index) => {
+      row.querySelectorAll("input, select").forEach((input) => {
+        if (input.name) {
+          input.name = input.name.replace(/References\[[^\]]+\]/, `References[${index}]`);
+        }
+      });
+    });
+  };
+
+  if (addReferenceButton && referencesGrid && referenceTemplate) {
+    addReferenceButton.addEventListener("click", (event) => {
+      event.preventDefault();
+      const fragment = referenceTemplate.content.cloneNode(true);
+      referencesGrid.appendChild(fragment.querySelector("[data-reference-row]"));
+      reindexReferenceRows();
+    });
+
+    referencesGrid.addEventListener("click", (event) => {
+      const button = event.target.closest("[data-remove-reference]");
+      if (!button) {
+        return;
+      }
+
+      event.preventDefault();
+      if (referencesGrid.querySelectorAll("[data-reference-row]").length <= 1) {
+        button.closest("[data-reference-row]").querySelectorAll("input").forEach((input) => { input.value = ""; });
+        return;
+      }
+
+      button.closest("[data-reference-row]")?.remove();
+      reindexReferenceRows();
+    });
+  }
+
+  const categoryPreview = document.getElementById("category-preview");
+  const downtimeRequired = document.getElementById("downtime-required");
+  const updateCategoryPreview = () => {
+    if (!categoryPreview) {
+      return;
+    }
+
+    const majorChecked = [...document.querySelectorAll("input[name='Criteria'][data-criterion='major']")].some((input) => input.checked);
+    const normalChecked = [...document.querySelectorAll("input[name='Criteria'][data-criterion='normal']")].some((input) => input.checked);
+    const dbChanges = [...document.querySelectorAll("input[name$='.DatabaseChanges']")].some((input) => input.checked);
+    const downtime = downtimeRequired?.checked ?? false;
+
+    categoryPreview.textContent = majorChecked ? "Major" : (normalChecked || dbChanges || downtime ? "Normal" : "Minor");
+  };
+
+  document.addEventListener("change", (event) => {
+    if (event.target.matches("input[name='Criteria'], input[name$='.DatabaseChanges'], #downtime-required")) {
+      updateCategoryPreview();
+    }
+  });
+  updateCategoryPreview();
+
+  const executionMode = document.getElementById("execution-mode");
+  const expeditedFields = document.getElementById("expedited-fields");
+  if (executionMode && expeditedFields) {
+    const toggle = () => {
+      const selected = executionMode.options[executionMode.selectedIndex]?.text ?? "";
+      expeditedFields.classList.toggle("d-none", selected !== "Expedited");
+    };
+
+    executionMode.addEventListener("change", toggle);
+    toggle();
+  }
+
   const bell = document.getElementById("notification-bell");
   const list = document.getElementById("notification-list");
   const badge = document.getElementById("notification-count");

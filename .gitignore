@@ -484,3 +484,7 @@ $RECYCLE.BIN/
 
 # Vim temporary swap files
 *.swp
+_to_delete/
+build.log
+build-check.cmd
+run-app.cmd

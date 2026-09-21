@@ -140,7 +140,8 @@ public static class ReleaseWorkflowRules
             RoleNames.ProductOwner,
             RoleNames.ReleaseManager);
 
-        // RM orchestrates: send to ONE structure, return to team, finish, or reject.
+        // Procedure v4.0 §2 / §5: the Release Manager coordinates the record — checks that the
+        // minimum record is complete and starts readiness. RM does not collect domain approvals.
         Add(
             ReleaseStatus.ReleaseManagerReview,
             ReleaseStatus.ReturnedForRevision,
@@ -148,27 +149,7 @@ public static class ReleaseWorkflowRules
             RoleNames.ReleaseManager);
         Add(
             ReleaseStatus.ReleaseManagerReview,
-            ReleaseStatus.QaReview,
-            false,
-            RoleNames.ReleaseManager);
-        Add(
-            ReleaseStatus.ReleaseManagerReview,
-            ReleaseStatus.InfoSecReview,
-            false,
-            RoleNames.ReleaseManager);
-        Add(
-            ReleaseStatus.ReleaseManagerReview,
-            ReleaseStatus.RiskReview,
-            false,
-            RoleNames.ReleaseManager);
-        Add(
-            ReleaseStatus.ReleaseManagerReview,
-            ReleaseStatus.ChapterLeadReview,
-            false,
-            RoleNames.ReleaseManager);
-        Add(
-            ReleaseStatus.ReleaseManagerReview,
-            ReleaseStatus.Approved,
+            ReleaseStatus.ReadinessInProgress,
             false,
             RoleNames.ReleaseManager);
         Add(
@@ -178,6 +159,29 @@ public static class ReleaseWorkflowRules
             RoleNames.ReleaseManager);
         Add(
             ReleaseStatus.ReleaseManagerReview,
+            ReleaseStatus.Cancelled,
+            true,
+            RoleNames.ReleaseManager);
+
+        // Readiness: evidence owners set control statuses (not transitions). RM verifies and
+        // marks the release ready only when every applicable control is closed (§8.1 hard block).
+        Add(
+            ReleaseStatus.ReadinessInProgress,
+            ReleaseStatus.ReadyForRelease,
+            false,
+            RoleNames.ReleaseManager);
+        Add(
+            ReleaseStatus.ReadinessInProgress,
+            ReleaseStatus.ReturnedForRevision,
+            true,
+            RoleNames.ReleaseManager);
+        Add(
+            ReleaseStatus.ReadinessInProgress,
+            ReleaseStatus.Rejected,
+            true,
+            RoleNames.ReleaseManager);
+        Add(
+            ReleaseStatus.ReadinessInProgress,
             ReleaseStatus.Cancelled,
             true,
             RoleNames.ReleaseManager);
@@ -194,7 +198,7 @@ public static class ReleaseWorkflowRules
             RoleNames.ProductOwner,
             RoleNames.ReleaseManager);
 
-        // Each structure: approve → back to RM; changes → team; reject → rejected.
+        // Legacy in-app structure reviews kept only for releases already in those statuses.
         AddStructureReview(
             ReleaseStatus.QaReview,
             ReleaseStatus.QaChangesRequired,
@@ -238,9 +242,10 @@ public static class ReleaseWorkflowRules
             false,
             RoleNames.ProductOwner);
 
+        // Legacy: releases approved under the old model continue into readiness.
         Add(
             ReleaseStatus.Approved,
-            ReleaseStatus.ReadyForRelease,
+            ReleaseStatus.ReadinessInProgress,
             false,
             RoleNames.ReleaseManager);
         Add(
@@ -248,6 +253,11 @@ public static class ReleaseWorkflowRules
             ReleaseStatus.DeploymentInProgress,
             false,
             RoleNames.DevOps);
+        Add(
+            ReleaseStatus.ReadyForRelease,
+            ReleaseStatus.ReadinessInProgress,
+            true,
+            RoleNames.ReleaseManager);
         Add(
             ReleaseStatus.ReadyForRelease,
             ReleaseStatus.Cancelled,
@@ -279,11 +289,31 @@ public static class ReleaseWorkflowRules
             ReleaseStatus.RolledBack,
             true,
             RoleNames.DevOps);
+
+        // §7.2: Deployed → validation is recorded → Stabilization (gate) → Closed (gate).
         Add(
             ReleaseStatus.Deployed,
+            ReleaseStatus.Stabilization,
+            false,
+            RoleNames.ReleaseManager,
+            RoleNames.TechnicalOwner);
+        Add(
+            ReleaseStatus.Deployed,
+            ReleaseStatus.RollbackInProgress,
+            true,
+            RoleNames.DevOps,
+            RoleNames.TechnicalOwner);
+        Add(
+            ReleaseStatus.Stabilization,
             ReleaseStatus.Closed,
             false,
             RoleNames.ReleaseManager);
+        Add(
+            ReleaseStatus.Stabilization,
+            ReleaseStatus.RollbackInProgress,
+            true,
+            RoleNames.DevOps,
+            RoleNames.TechnicalOwner);
 
         return transitions.ToDictionary(
             pair => pair.Key,

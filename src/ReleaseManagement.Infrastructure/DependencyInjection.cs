@@ -135,7 +135,15 @@ public static class DependencyInjection
         services.AddScoped<IEmailSender, LoggingEmailSender>();
         services.AddScoped<INotificationService, NotificationService>();
         services.AddScoped<IExternalUserProvisioner, ExternalUserProvisioner>();
-        services.AddScoped<IActiveDirectoryAuthenticator, ActiveDirectoryAuthenticator>();
+        if (windowsAuth.IsMock)
+        {
+            services.AddScoped<IActiveDirectoryAuthenticator, MockActiveDirectoryAuthenticator>();
+        }
+        else
+        {
+            services.AddScoped<IActiveDirectoryAuthenticator, ActiveDirectoryAuthenticator>();
+        }
+
         services.AddScoped<IAzureDevOpsUserCredentialStore, SessionAzureDevOpsUserCredentialStore>();
         services.AddScoped<IAzureDevOpsTokenProvider, AzureDevOpsTokenProvider>();
         services.AddScoped<IBackgroundJobSettings, BackgroundJobSettings>();
@@ -144,22 +152,30 @@ public static class DependencyInjection
         services.AddTransient<OutboxProcessorJob>();
         services.AddTransient<TemporaryFileCleanupJob>();
 
-        services.AddHttpClient<IAzureDevOpsService, AzureDevOpsService>((_, client) =>
-            {
-                AzureDevOpsHttpClientConfigurator.Configure(client, azureDevOps);
-            })
-            .ConfigurePrimaryHttpMessageHandler(provider =>
-                new AzureDevOpsAuthHandler(
-                    provider.GetRequiredService<IAzureDevOpsUserCredentialStore>(),
-                    provider.GetRequiredService<IOptions<AzureDevOpsOptions>>()))
-            .AddStandardResilienceHandler();
+        if (azureDevOps.IsMock)
+        {
+            services.AddScoped<IAzureDevOpsService, MockAzureDevOpsService>();
+            services.AddScoped<IAzureDevOpsProjectAccessService, MockAzureDevOpsProjectAccessService>();
+        }
+        else
+        {
+            services.AddHttpClient<IAzureDevOpsService, AzureDevOpsService>((_, client) =>
+                {
+                    AzureDevOpsHttpClientConfigurator.Configure(client, azureDevOps);
+                })
+                .ConfigurePrimaryHttpMessageHandler(provider =>
+                    new AzureDevOpsAuthHandler(
+                        provider.GetRequiredService<IAzureDevOpsUserCredentialStore>(),
+                        provider.GetRequiredService<IOptions<AzureDevOpsOptions>>()))
+                .AddStandardResilienceHandler();
 
-        services.AddHttpClient<IAzureDevOpsProjectAccessService, AzureDevOpsProjectAccessService>()
-            .ConfigurePrimaryHttpMessageHandler(provider =>
-                new AzureDevOpsAuthHandler(
-                    provider.GetRequiredService<IAzureDevOpsUserCredentialStore>(),
-                    provider.GetRequiredService<IOptions<AzureDevOpsOptions>>()))
-            .AddStandardResilienceHandler();
+            services.AddHttpClient<IAzureDevOpsProjectAccessService, AzureDevOpsProjectAccessService>()
+                .ConfigurePrimaryHttpMessageHandler(provider =>
+                    new AzureDevOpsAuthHandler(
+                        provider.GetRequiredService<IAzureDevOpsUserCredentialStore>(),
+                        provider.GetRequiredService<IOptions<AzureDevOpsOptions>>()))
+                .AddStandardResilienceHandler();
+        }
 
         if (!demoMode && hangfireEnabled)
         {

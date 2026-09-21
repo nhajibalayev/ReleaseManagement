@@ -3,7 +3,10 @@ using Microsoft.EntityFrameworkCore;
 using ReleaseManagement.Application.Abstractions;
 using ReleaseManagement.Application.Authorization;
 using ReleaseManagement.Application.Common;
+using ReleaseManagement.Application.DTOs.Procedure;
 using ReleaseManagement.Application.DTOs.Releases;
+using ReleaseManagement.Application.Planning;
+using ReleaseManagement.Application.PostRelease;
 using ReleaseManagement.Domain.Constants;
 using ReleaseManagement.Domain.Entities;
 using ReleaseManagement.Domain.Enums;
@@ -19,6 +22,7 @@ public sealed class ReleaseAppService : IReleaseAppService
     private readonly IReleaseNumberGenerator _releaseNumberGenerator;
     private readonly IClock _clock;
     private readonly IAuditService _audit;
+    private readonly IPlanningService _planning;
     private readonly IValidator<CreateReleaseDraftRequest> _createValidator;
     private readonly IValidator<UpdateReleaseDraftRequest> _updateValidator;
 
@@ -29,6 +33,7 @@ public sealed class ReleaseAppService : IReleaseAppService
         IReleaseNumberGenerator releaseNumberGenerator,
         IClock clock,
         IAuditService audit,
+        IPlanningService planning,
         IValidator<CreateReleaseDraftRequest> createValidator,
         IValidator<UpdateReleaseDraftRequest> updateValidator)
     {
@@ -38,6 +43,7 @@ public sealed class ReleaseAppService : IReleaseAppService
         _releaseNumberGenerator = releaseNumberGenerator;
         _clock = clock;
         _audit = audit;
+        _planning = planning;
         _createValidator = createValidator;
         _updateValidator = updateValidator;
     }
@@ -61,12 +67,13 @@ public sealed class ReleaseAppService : IReleaseAppService
             request.Description,
             request.ProductId,
             request.EnvironmentId,
-            request.PlannedReleaseDateUtc,
+            request.PlannedWindowStartUtc,
             _currentUser.UserId,
             now);
 
-        ApplyDraftFields(release, request, now);
         ApplyServices(release, request.Services, now);
+        ApplyDraftFields(release, request, now);
+        ApplyReferences(release, request.References, now);
 
         _dbContext.Releases.Add(release);
 
@@ -75,7 +82,7 @@ public sealed class ReleaseAppService : IReleaseAppService
             nameof(Release),
             release.Id.ToString(),
             null,
-            new { release.ReleaseNumber, release.Title, release.ProductId },
+            new { release.ReleaseNumber, release.Title, release.ProductId, release.Category, release.ExecutionMode },
             cancellationToken);
 
         await _dbContext.SaveChangesAsync(cancellationToken);
@@ -92,6 +99,7 @@ public sealed class ReleaseAppService : IReleaseAppService
 
         var release = await _dbContext.Releases
             .Include(item => item.Services)
+            .Include(item => item.References)
             .SingleOrDefaultAsync(item => item.Id == request.ReleaseId, cancellationToken);
 
         if (release is null)
@@ -107,16 +115,24 @@ public sealed class ReleaseAppService : IReleaseAppService
         await EnsureCatalogAsync(request, cancellationToken);
 
         var now = _clock.UtcNow;
-        ApplyDraftFields(release, request, now);
         release.ClearServices(now);
         ApplyServices(release, request.Services, now);
+        ApplyDraftFields(release, request, now);
+
+        foreach (var reference in release.References.ToArray())
+        {
+            release.RemoveReference(reference.Id, now);
+            _dbContext.ReleaseReferences.Remove(reference);
+        }
+
+        ApplyReferences(release, request.References, now);
 
         await _audit.WriteAsync(
             "Release.UpdateDraft",
             nameof(Release),
             release.Id.ToString(),
             null,
-            new { release.Title, release.CurrentStatus },
+            new { release.Title, release.CurrentStatus, release.Category, release.ExecutionMode },
             cancellationToken);
 
         await _dbContext.SaveChangesAsync(cancellationToken);
@@ -131,6 +147,10 @@ public sealed class ReleaseAppService : IReleaseAppService
         var release = await _dbContext.Releases
             .AsNoTracking()
             .Include(item => item.Services)
+            .Include(item => item.References)
+            .Include(item => item.ReadinessControls)
+            .Include(item => item.Communications)
+            .Include(item => item.DeploymentRecords)
             .SingleOrDefaultAsync(item => item.Id == releaseId, cancellationToken);
 
         if (release is null)
@@ -139,6 +159,57 @@ public sealed class ReleaseAppService : IReleaseAppService
         }
 
         var status = await BuildStatusSummaryAsync(release, cancellationToken);
+
+        var validation = await _dbContext.PostReleaseValidations
+            .AsNoTracking()
+            .SingleOrDefaultAsync(item => item.ReleaseId == releaseId, cancellationToken);
+
+        var review = await _dbContext.PostImplementationReviews
+            .AsNoTracking()
+            .Include(item => item.Actions)
+            .SingleOrDefaultAsync(item => item.ReleaseId == releaseId, cancellationToken);
+
+        var userIds = release.ReadinessControls
+            .Where(item => item.UpdatedByUserId.HasValue)
+            .Select(item => item.UpdatedByUserId!.Value)
+            .Concat(release.Communications.Select(item => item.SentByUserId))
+            .Concat(validation is null
+                ? Array.Empty<Guid>()
+                : new[] { validation.TechnicalValidatedByUserId, validation.BusinessValidatedByUserId }
+                    .Where(item => item.HasValue)
+                    .Select(item => item!.Value))
+            .Distinct()
+            .ToArray();
+
+        var userNames = userIds.Length == 0
+            ? new Dictionary<Guid, string>()
+            : await _dbContext.Users
+                .AsNoTracking()
+                .Where(user => userIds.Contains(user.Id))
+                .ToDictionaryAsync(user => user.Id, user => user.FullName, cancellationToken);
+
+        var freezeConflicts = await _planning.GetFreezeConflictsAsync(
+            release.Id,
+            release.PlannedWindowStart,
+            release.PlannedWindowEnd,
+            cancellationToken);
+
+        var environment = await _dbContext.Environments
+            .AsNoTracking()
+            .Where(item => item.Id == release.EnvironmentId)
+            .Select(item => new { item.IsProduction })
+            .SingleOrDefaultAsync(cancellationToken);
+
+        var gateErrors = release.CurrentStatus switch
+        {
+            ReleaseStatus.ReadinessInProgress or ReleaseStatus.ReleaseManagerReview =>
+                ReleaseReadinessRules.GetReadyForReleaseErrors(release, environment?.IsProduction ?? true),
+            ReleaseStatus.Deployed =>
+                ReleaseReadinessRules.GetStabilizationErrors(release, validation),
+            ReleaseStatus.Stabilization =>
+                ReleaseReadinessRules.GetClosureErrors(release, validation, review, _clock.UtcNow),
+            _ => Array.Empty<string>()
+        };
 
         return new ReleaseDetailsDto
         {
@@ -185,7 +256,67 @@ public sealed class ReleaseAppService : IReleaseAppService
                 .ToArray(),
             AllowedTransitions = ReleaseWorkflowRules.GetAllowedTargets(
                 release.CurrentStatus,
-                _currentUser.Roles)
+                _currentUser.Roles),
+            Track = release.Track,
+            Category = release.Category,
+            ClassificationCriteria = release.ClassificationCriteria,
+            SecurityTriggers = release.SecurityTriggers,
+            ExecutionMode = release.ExecutionMode,
+            ExpeditedJustification = release.ExpeditedJustification,
+            DirectorApprovalReference = release.DirectorApprovalReference,
+            TechnicalOwnerUserId = release.TechnicalOwnerUserId,
+            ReleaseManagerUserId = release.ReleaseManagerUserId,
+            PlannedWindowStart = release.PlannedWindowStart,
+            PlannedWindowEnd = release.PlannedWindowEnd,
+            ActualWindowStart = release.ActualWindowStart,
+            ActualWindowEnd = release.ActualWindowEnd,
+            PlannedMaintenance = release.PlannedMaintenance,
+            MaintenanceApprovalReference = release.MaintenanceApprovalReference,
+            OperationalImpact = release.OperationalImpact,
+            KeyDependencies = release.KeyDependencies,
+            RecoveryApproach = release.RecoveryApproach,
+            RecoveryDecisionPoints = release.RecoveryDecisionPoints,
+            RecoveryResponsibleParties = release.RecoveryResponsibleParties,
+            StabilizationStart = release.StabilizationStart,
+            StabilizationEnd = release.StabilizationEnd,
+            StabilizationNotes = release.StabilizationNotes,
+            Outcome = release.Outcome,
+            OutcomeNotes = release.OutcomeNotes,
+            ForecastId = release.ForecastId,
+            References = release.References
+                .OrderBy(item => item.ReferenceType)
+                .ThenBy(item => item.AddedDate)
+                .Select(item => new ReleaseReferenceDto
+                {
+                    Id = item.Id,
+                    ReferenceType = item.ReferenceType,
+                    ExternalId = item.ExternalId,
+                    Url = item.Url,
+                    Title = item.Title,
+                    AddedDate = item.AddedDate,
+                    IsSourceReference = item.IsSourceReference
+                })
+                .ToArray(),
+            ReadinessControls = BuildReadinessMatrix(release, userNames),
+            Communications = release.Communications
+                .OrderByDescending(item => item.SentDate)
+                .Select(item => new ReleaseCommunicationDto
+                {
+                    Id = item.Id,
+                    CommunicationType = item.CommunicationType,
+                    Audience = item.Audience,
+                    Channel = item.Channel,
+                    Message = item.Message,
+                    SentByDisplay = userNames.GetValueOrDefault(item.SentByUserId),
+                    SentDate = item.SentDate
+                })
+                .ToArray(),
+            Validation = MapValidation(validation, userNames),
+            Review = review is null ? null : PostReleaseService.Map(review, release.ReleaseNumber, release.Title),
+            FreezeConflicts = freezeConflicts,
+            GateErrors = gateErrors,
+            RequiresPreReleaseCommunication = ReleaseReadinessRules.RequiresPreReleaseCommunication(release),
+            RequiresBusinessValidation = ReleaseReadinessRules.RequiresBusinessValidation(release)
         };
     }
 
@@ -229,6 +360,7 @@ public sealed class ReleaseAppService : IReleaseAppService
 
             query = query.Where(release =>
                 release.CreatedByUserId == _currentUser.UserId ||
+                release.TechnicalOwnerUserId == _currentUser.UserId ||
                 accessibleProductIds.Contains(release.ProductId));
         }
 
@@ -263,10 +395,78 @@ public sealed class ReleaseAppService : IReleaseAppService
                         release.CurrentResponsibleRole,
                         release.CurrentResponsibleUserId),
                     UpdatedDate = release.UpdatedDate,
-                    ActionRequiredFromCurrentUser = actionRequired
+                    ActionRequiredFromCurrentUser = actionRequired,
+                    Category = release.Category,
+                    ExecutionMode = release.ExecutionMode
                 };
             })
             .ToArray();
+    }
+
+    private IReadOnlyCollection<ReadinessControlDto> BuildReadinessMatrix(
+        Release release,
+        IReadOnlyDictionary<Guid, string> userNames)
+    {
+        return ReleaseReadinessRules.Definitions
+            .Select(definition =>
+            {
+                var control = release.ReadinessControls.SingleOrDefault(item => item.ControlType == definition.ControlType);
+                var required = control?.IsRequired ?? ReleaseReadinessRules.IsControlRequired(release, definition.ControlType);
+
+                return new ReadinessControlDto
+                {
+                    Id = control?.Id,
+                    ControlType = definition.ControlType,
+                    Title = definition.Title,
+                    ProcedureSection = definition.ProcedureSection,
+                    Description = definition.Description,
+                    OwnerRole = definition.OwnerRole,
+                    IsRequired = required,
+                    Status = control?.Status ?? ReadinessControlStatus.Pending,
+                    EvidenceReference = control?.EvidenceReference,
+                    Justification = control?.Justification,
+                    UpdatedByDisplay = control?.UpdatedByUserId is { } userId ? userNames.GetValueOrDefault(userId) : null,
+                    UpdatedDate = control is { UpdatedByUserId: not null } ? control.UpdatedDate : (DateTime?)null,
+                    CanCurrentUserSet = ReleaseReadinessRules.CanUserSetControl(definition, _currentUser.Roles),
+                    IsClosed = control?.IsClosed ?? !required
+                };
+            })
+            .ToArray();
+    }
+
+    private static PostReleaseValidationDto MapValidation(
+        PostReleaseValidation? validation,
+        IReadOnlyDictionary<Guid, string> userNames)
+    {
+        if (validation is null)
+        {
+            return new PostReleaseValidationDto();
+        }
+
+        return new PostReleaseValidationDto
+        {
+            Exists = true,
+            TechnicalResult = validation.TechnicalResult,
+            HealthCheckPassed = validation.HealthCheckPassed,
+            SmokeTestPassed = validation.SmokeTestPassed,
+            MonitoringClean = validation.MonitoringClean,
+            RecoveryNeeded = validation.RecoveryNeeded,
+            TechnicalNotes = validation.TechnicalNotes,
+            TechnicalEvidenceReference = validation.TechnicalEvidenceReference,
+            TechnicalValidatedDate = validation.TechnicalValidatedDate,
+            TechnicalValidatedByDisplay = validation.TechnicalValidatedByUserId is { } technicalUser
+                ? userNames.GetValueOrDefault(technicalUser)
+                : null,
+            BusinessValidationRequired = validation.BusinessValidationRequired,
+            BusinessResult = validation.BusinessResult,
+            BusinessNotes = validation.BusinessNotes,
+            BusinessValidatedDate = validation.BusinessValidatedDate,
+            BusinessValidatedByDisplay = validation.BusinessValidatedByUserId is { } businessUser
+                ? userNames.GetValueOrDefault(businessUser)
+                : null,
+            IsComplete = validation.IsComplete,
+            IsPassed = validation.IsPassed
+        };
     }
 
     private async Task<ReleaseStatusSummaryDto> BuildStatusSummaryAsync(
@@ -364,6 +564,18 @@ public sealed class ReleaseAppService : IReleaseAppService
             throw new BusinessRuleException("Environment is missing or inactive.");
         }
 
+        if (request.ForecastId is { } forecastId && forecastId != Guid.Empty)
+        {
+            var forecastMatches = await _dbContext.ReleaseForecasts
+                .AsNoTracking()
+                .AnyAsync(item => item.Id == forecastId && item.ProductId == request.ProductId, cancellationToken);
+
+            if (!forecastMatches)
+            {
+                throw new BusinessRuleException("The selected forecast entry does not belong to the selected product.");
+            }
+        }
+
         if (request.Services.Count == 0)
         {
             return;
@@ -396,7 +608,7 @@ public sealed class ReleaseAppService : IReleaseAppService
             request.ReleaseType,
             request.Priority,
             request.EnvironmentId,
-            request.PlannedReleaseDateUtc,
+            request.PlannedWindowStartUtc,
             request.ReleaseVersion ?? string.Empty,
             request.BusinessReason ?? string.Empty,
             request.ImpactDescription ?? string.Empty,
@@ -413,6 +625,74 @@ public sealed class ReleaseAppService : IReleaseAppService
             request.DowntimeRequired,
             request.ExpectedDowntimeMinutes,
             now);
+
+        try
+        {
+            release.UpdateSchedule(
+                request.PlannedWindowStartUtc,
+                request.PlannedWindowEndUtc,
+                request.PlannedMaintenance,
+                request.MaintenanceApprovalReference,
+                request.OperationalImpact,
+                request.KeyDependencies,
+                now);
+
+            release.UpdateClassification(
+                request.ClassificationCriteria,
+                request.SecurityTriggers,
+                request.ExecutionMode,
+                request.ExpeditedJustification,
+                request.DirectorApprovalReference,
+                now);
+
+            release.UpdateRecovery(
+                request.RecoveryApproach,
+                request.RecoveryDecisionPoints,
+                request.RecoveryResponsibleParties,
+                now);
+        }
+        catch (ArgumentException exception)
+        {
+            throw new BusinessRuleException(exception.Message);
+        }
+
+        release.AssignOwners(
+            request.TechnicalOwnerUserId ?? release.TechnicalOwnerUserId,
+            release.ReleaseManagerUserId,
+            now);
+
+        release.LinkForecast(request.ForecastId, now);
+    }
+
+    private void ApplyReferences(
+        Release release,
+        IEnumerable<ReleaseReferenceInputDto> references,
+        DateTime now)
+    {
+        foreach (var input in references.Where(item => !string.IsNullOrWhiteSpace(item.ExternalId)))
+        {
+            var reference = new ReleaseReference(
+                Guid.NewGuid(),
+                release.Id,
+                input.ReferenceType,
+                input.ExternalId,
+                input.Url,
+                input.Title,
+                _currentUser.UserId,
+                now);
+
+            try
+            {
+                release.AddReference(reference, now);
+            }
+            catch (InvalidOperationException)
+            {
+                // Duplicate rows in the form are ignored.
+                continue;
+            }
+
+            _dbContext.ReleaseReferences.Add(reference);
+        }
     }
 
     private static void ApplyServices(

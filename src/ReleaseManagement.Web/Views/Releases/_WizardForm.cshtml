@@ -1,7 +1,40 @@
+@using ReleaseManagement.Domain.Rules
 @model ReleaseWizardViewModel
 @{
     var formAction = (string?)ViewData["FormAction"] ?? "Create";
-    var stepNames = new[] { "General", "Services", "Testing", "Risk & deployment", "Review" };
+    var stepNames = new[] { "General & window", "Services", "Classification", "Source links", "Readiness plans", "Review" };
+    var majorCriteria = new (ClassificationCriteria Value, string Label)[]
+    {
+        (ClassificationCriteria.SignificantCustomerImpact, "Significant customer / business impact"),
+        (ClassificationCriteria.DowntimeOnCriticalService, "Downtime on a critical customer-facing service"),
+        (ClassificationCriteria.MultiTeamCoordination, "Multi-team coordinated deployment"),
+        (ClassificationCriteria.ComplexDataMigration, "Complex DB / data migration"),
+        (ClassificationCriteria.ComplexRecovery, "Complex recovery / backout"),
+        (ClassificationCriteria.HighBusinessSignificance, "High business significance (regulatory, strategic)")
+    };
+    var normalCriteria = new (ClassificationCriteria Value, string Label)[]
+    {
+        (ClassificationCriteria.ModerateCustomerImpact, "Moderate customer impact"),
+        (ClassificationCriteria.LimitedDowntime, "Limited downtime"),
+        (ClassificationCriteria.SchemaOrDataChange, "Schema or data change"),
+        (ClassificationCriteria.SharedComponentImpact, "Shared / core component impact")
+    };
+    var securityTriggers = new (SecurityTriggers Value, string Label)[]
+    {
+        (SecurityTriggers.NewInternetFacingApplication, "New internet-facing application"),
+        (SecurityTriggers.NewExternalApi, "New external API"),
+        (SecurityTriggers.SignificantAuthorizationChange, "Significant authorization change"),
+        (SecurityTriggers.SensitiveDataChange, "Sensitive data change"),
+        (SecurityTriggers.SecurityArchitectureChange, "Security architecture change"),
+        (SecurityTriggers.InfoSecRiskRequest, "InfoSec risk request"),
+        (SecurityTriggers.RegulatoryOrContractRequirement, "Regulatory / contract requirement")
+    };
+    var referenceTypes = new[]
+    {
+        ReleaseReferenceType.WorkItem, ReleaseReferenceType.PullRequest, ReleaseReferenceType.Pipeline,
+        ReleaseReferenceType.Artifact, ReleaseReferenceType.ServiceDeskChange, ReleaseReferenceType.TestEvidence,
+        ReleaseReferenceType.SecurityAssessment, ReleaseReferenceType.MonitoringDashboard, ReleaseReferenceType.Other
+    };
 }
 
 <div class="wizard-steps" aria-label="Release wizard progress">
@@ -15,10 +48,22 @@
     @Html.AntiForgeryToken()
     <input asp-for="ReleaseId" type="hidden" />
     <input asp-for="Step" type="hidden" />
+    <input asp-for="PlannedReleaseDate" type="hidden" />
     <div asp-validation-summary="ModelOnly" class="alert alert-danger"></div>
 
+    @if (Model.FreezeWarnings.Any())
+    {
+        <div class="alert alert-warning">
+            <strong>Release freeze (§6.3):</strong> the planned window overlaps an active freeze. Reschedule or ask the Release Manager to record an exception approved by the freeze authority.
+            <ul class="mb-0">
+                @foreach (var warning in Model.FreezeWarnings) { <li>@warning</li> }
+            </ul>
+        </div>
+    }
+
     <section class="panel @(Model.Step == 1 ? "" : "d-none")">
-        <h2 class="h5">General information</h2>
+        <h2 class="h5">General information &amp; planned window</h2>
+        <p class="text-muted">Track: <strong>Application</strong> (Azure Boards + SDLC). Infrastructure changes come from Service Desk and are out of scope today.</p>
         <div class="row g-3">
             <div class="col-md-8">
                 <label asp-for="Title" class="form-label"></label>
@@ -47,16 +92,45 @@
                 </select>
             </div>
             <div class="col-md-4">
-                <label asp-for="PlannedReleaseDate" class="form-label"></label>
-                <input asp-for="PlannedReleaseDate" class="form-control" />
+                <label asp-for="PlannedWindowStart" class="form-label"></label>
+                <input asp-for="PlannedWindowStart" type="datetime-local" class="form-control" />
+                <span asp-validation-for="PlannedWindowStart" class="text-danger small"></span>
             </div>
             <div class="col-md-4">
-                <label asp-for="ReleaseType" class="form-label"></label>
-                <select asp-for="ReleaseType" class="form-select" asp-items="Html.GetEnumSelectList<ReleaseType>()"></select>
+                <label asp-for="PlannedWindowEnd" class="form-label"></label>
+                <input asp-for="PlannedWindowEnd" type="datetime-local" class="form-control" />
+                <span asp-validation-for="PlannedWindowEnd" class="text-danger small"></span>
             </div>
             <div class="col-md-4">
-                <label asp-for="Priority" class="form-label"></label>
-                <select asp-for="Priority" class="form-select" asp-items="Html.GetEnumSelectList<ReleasePriority>()"></select>
+                <label asp-for="TechnicalOwnerUserId" class="form-label"></label>
+                <select asp-for="TechnicalOwnerUserId" class="form-select" asp-items="@(new SelectList(Model.TechnicalOwners, "Id", "Name"))">
+                    <option value="">Assigned by Release Manager</option>
+                </select>
+            </div>
+            <div class="col-md-4">
+                <div class="form-check mt-4">
+                    <input asp-for="PlannedMaintenance" class="form-check-input" />
+                    <label asp-for="PlannedMaintenance" class="form-check-label"></label>
+                </div>
+            </div>
+            <div class="col-md-8">
+                <label asp-for="MaintenanceApprovalReference" class="form-label"></label>
+                <input asp-for="MaintenanceApprovalReference" class="form-control" placeholder="Approved maintenance window reference (§6.1)" />
+            </div>
+            <div class="col-md-6">
+                <label asp-for="ForecastId" class="form-label"></label>
+                <select asp-for="ForecastId" class="form-select" asp-items="@(new SelectList(Model.Forecasts, "Id", "Name"))">
+                    <option value="">Not in the quarterly forecast</option>
+                </select>
+                <div class="form-text">Major planned releases must be listed in the quarterly forecast (§3.1).</div>
+            </div>
+            <div class="col-md-6">
+                <label asp-for="KeyDependencies" class="form-label"></label>
+                <input asp-for="KeyDependencies" class="form-control" placeholder="Other releases, teams, vendors, infrastructure changes" />
+            </div>
+            <div class="col-12">
+                <label asp-for="ImpactDescription" class="form-label"></label>
+                <textarea asp-for="ImpactDescription" class="form-control" rows="2" placeholder="Expected customer / business impact"></textarea>
             </div>
         </div>
     </section>
@@ -127,42 +201,138 @@
     </section>
 
     <section class="panel @(Model.Step == 3 ? "" : "d-none")">
-        <h2 class="h5">Testing</h2>
-        <label asp-for="TestingSummary" class="form-label"></label>
-        <textarea asp-for="TestingSummary" class="form-control" rows="8" placeholder="Summarize test scope, results, and supporting evidence."></textarea>
+        <h2 class="h5">Classification (§4.1) and execution mode (§4.2)</h2>
+        <p class="text-muted">Any significant Major criterion makes the whole release Major; otherwise Normal impact makes it Normal; otherwise Minor. Database changes and planned downtime raise the release to at least Normal.</p>
+        <div class="row g-4">
+            <div class="col-lg-6">
+                <h3 class="h6">Major criteria</h3>
+                @foreach (var criterion in majorCriteria)
+                {
+                    <div class="form-check">
+                        <input type="checkbox" name="Criteria" value="@criterion.Value" class="form-check-input" id="crit_@criterion.Value" data-criterion="major" @(Model.Criteria.Contains(criterion.Value) ? "checked" : null) />
+                        <label class="form-check-label" for="crit_@criterion.Value">@criterion.Label</label>
+                    </div>
+                }
+                <h3 class="h6 mt-3">Normal criteria</h3>
+                @foreach (var criterion in normalCriteria)
+                {
+                    <div class="form-check">
+                        <input type="checkbox" name="Criteria" value="@criterion.Value" class="form-check-input" id="crit_@criterion.Value" data-criterion="normal" @(Model.Criteria.Contains(criterion.Value) ? "checked" : null) />
+                        <label class="form-check-label" for="crit_@criterion.Value">@criterion.Label</label>
+                    </div>
+                }
+                <div class="alert alert-secondary mt-3 mb-0">
+                    Resulting category: <strong id="category-preview">@Model.PreviewCategory</strong>
+                    <div class="small text-muted">Final category is confirmed by the Release Manager and Technical Owner.</div>
+                </div>
+            </div>
+            <div class="col-lg-6">
+                <h3 class="h6">Security assessment triggers (§5.2)</h3>
+                @foreach (var trigger in securityTriggers)
+                {
+                    <div class="form-check">
+                        <input type="checkbox" name="Triggers" value="@trigger.Value" class="form-check-input" id="trig_@trigger.Value" @(Model.Triggers.Contains(trigger.Value) ? "checked" : null) />
+                        <label class="form-check-label" for="trig_@trigger.Value">@trigger.Label</label>
+                    </div>
+                }
+                <div class="form-text mb-3">When any trigger applies, InfoSec cannot mark security readiness as Not Required.</div>
+
+                <h3 class="h6">Execution mode</h3>
+                <select asp-for="ExecutionMode" class="form-select mb-2" asp-items="Html.GetEnumSelectList<ExecutionMode>()" id="execution-mode"></select>
+                <div id="expedited-fields" class="@(Model.ExecutionMode == ExecutionMode.Expedited ? "" : "d-none")">
+                    <label asp-for="ExpeditedJustification" class="form-label"></label>
+                    <textarea asp-for="ExpeditedJustification" class="form-control mb-2" rows="3" placeholder="Business / service / security / incident urgency (§6.2)"></textarea>
+                    <label asp-for="DirectorApprovalReference" class="form-label"></label>
+                    <input asp-for="DirectorApprovalReference" class="form-control" placeholder="Required for significant impact (§6.2)" />
+                    <div class="form-text">Expedited is not Change Management “Emergency”. A Post-Release Review is mandatory after an Expedited release.</div>
+                </div>
+            </div>
+        </div>
     </section>
 
     <section class="panel @(Model.Step == 4 ? "" : "d-none")">
-        <h2 class="h5">Risk, deployment, and rollback</h2>
-        <div class="row g-3">
-            <div class="col-md-4">
-                <label asp-for="RiskLevel" class="form-label"></label>
-                <select asp-for="RiskLevel" class="form-select" asp-items="Html.GetEnumSelectList<RiskLevel>()"></select>
+        <div class="d-flex justify-content-between align-items-center mb-3">
+            <div>
+                <h2 class="h5 mb-1">Source links (§1.3, §8.1)</h2>
+                <p class="text-muted mb-0">Link the authoritative sources — Azure Boards work item / PR / pipeline / artifact, Service Desk Change. Evidence stays in the source system; the record only references it. At least one source reference is required.</p>
             </div>
-            <div class="col-md-8">
-                <label asp-for="RiskDescription" class="form-label"></label>
-                <textarea asp-for="RiskDescription" class="form-control" rows="2"></textarea>
-            </div>
-            <div class="col-md-6"><label asp-for="DeploymentPlan" class="form-label"></label><textarea asp-for="DeploymentPlan" class="form-control" rows="4"></textarea></div>
-            <div class="col-md-6"><label asp-for="RollbackPlan" class="form-label"></label><textarea asp-for="RollbackPlan" class="form-control" rows="4"></textarea></div>
-            <div class="col-md-6"><label asp-for="MonitoringPlan" class="form-label"></label><textarea asp-for="MonitoringPlan" class="form-control" rows="3"></textarea></div>
-            <div class="col-md-6"><label asp-for="PostReleaseValidationPlan" class="form-label"></label><textarea asp-for="PostReleaseValidationPlan" class="form-control" rows="3"></textarea></div>
-            <div class="col-md-4">
-                <div class="form-check mt-4"><input asp-for="DowntimeRequired" class="form-check-input" /><label asp-for="DowntimeRequired" class="form-check-label"></label></div>
-            </div>
-            <div class="col-md-4"><label asp-for="ExpectedDowntimeMinutes" class="form-label"></label><input asp-for="ExpectedDowntimeMinutes" class="form-control" min="0" /></div>
+            <button type="button" class="btn btn-outline-secondary" id="add-reference-row">Add link</button>
+        </div>
+        <div id="references-grid">
+            @for (var i = 0; i < Model.References.Count; i++)
+            {
+                <div class="row g-2 align-items-end mb-2" data-reference-row>
+                    <div class="col-md-3">
+                        <label class="form-label">Type</label>
+                        <select name="References[@i].ReferenceType" class="form-select" asp-items="@(new SelectList(referenceTypes, Model.References[i].ReferenceType))"></select>
+                    </div>
+                    <div class="col-md-2">
+                        <label class="form-label">ID</label>
+                        <input name="References[@i].ExternalId" value="@Model.References[i].ExternalId" class="form-control" placeholder="e.g. 12345" />
+                    </div>
+                    <div class="col-md-4">
+                        <label class="form-label">URL</label>
+                        <input name="References[@i].Url" value="@Model.References[i].Url" class="form-control" placeholder="https://devops…" />
+                    </div>
+                    <div class="col-md-2">
+                        <label class="form-label">Title</label>
+                        <input name="References[@i].Title" value="@Model.References[i].Title" class="form-control" />
+                    </div>
+                    <div class="col-md-1">
+                        <button type="button" class="btn btn-outline-danger w-100" data-remove-reference>×</button>
+                    </div>
+                </div>
+            }
         </div>
     </section>
 
     <section class="panel @(Model.Step == 5 ? "" : "d-none")">
+        <h2 class="h5">Readiness plans (§5) and recovery (§5.3)</h2>
+        <div class="row g-3">
+            <div class="col-12">
+                <label asp-for="TestingSummary" class="form-label"></label>
+                <textarea asp-for="TestingSummary" class="form-control" rows="4" placeholder="Summarize test scope and results; link the QA evidence on the previous step."></textarea>
+            </div>
+            <div class="col-md-4">
+                <label asp-for="RecoveryApproach" class="form-label"></label>
+                <select asp-for="RecoveryApproach" class="form-select" asp-items="Html.GetEnumSelectList<RecoveryApproach>()"></select>
+                <div class="form-text">Minor: standard pipeline rollback · Normal: rollback/backout or roll-forward · Major: formal recovery plan.</div>
+            </div>
+            <div class="col-md-8">
+                <label asp-for="RollbackPlan" class="form-label">Rollback / backout or roll-forward description</label>
+                <textarea asp-for="RollbackPlan" class="form-control" rows="3"></textarea>
+            </div>
+            <div class="col-md-6">
+                <label asp-for="RecoveryDecisionPoints" class="form-label"></label>
+                <textarea asp-for="RecoveryDecisionPoints" class="form-control" rows="3" placeholder="When do we decide to roll back? Who decides? (mandatory for Major)"></textarea>
+            </div>
+            <div class="col-md-6">
+                <label asp-for="RecoveryResponsibleParties" class="form-label"></label>
+                <textarea asp-for="RecoveryResponsibleParties" class="form-control" rows="3" placeholder="Responsible parties for recovery (mandatory for Major)"></textarea>
+            </div>
+            <div class="col-md-6"><label asp-for="DeploymentPlan" class="form-label"></label><textarea asp-for="DeploymentPlan" class="form-control" rows="3"></textarea></div>
+            <div class="col-md-6"><label asp-for="MonitoringPlan" class="form-label"></label><textarea asp-for="MonitoringPlan" class="form-control" rows="3"></textarea></div>
+            <div class="col-md-6"><label asp-for="PostReleaseValidationPlan" class="form-label"></label><textarea asp-for="PostReleaseValidationPlan" class="form-control" rows="3"></textarea></div>
+            <div class="col-md-3">
+                <div class="form-check mt-4"><input asp-for="DowntimeRequired" class="form-check-input" id="downtime-required" /><label asp-for="DowntimeRequired" class="form-check-label"></label></div>
+                <div class="form-check"><input asp-for="OperationalImpact" class="form-check-input" /><label asp-for="OperationalImpact" class="form-check-label"></label></div>
+            </div>
+            <div class="col-md-3"><label asp-for="ExpectedDowntimeMinutes" class="form-label"></label><input asp-for="ExpectedDowntimeMinutes" class="form-control" min="0" /></div>
+        </div>
+    </section>
+
+    <section class="panel @(Model.Step == 6 ? "" : "d-none")">
         <h2 class="h5">Review</h2>
         <dl class="status-summary">
             <div><dt>Title</dt><dd>@Model.Title</dd></div>
             <div><dt>Version</dt><dd>@(Model.ReleaseVersion ?? "—")</dd></div>
-            <div><dt>Planned date</dt><dd>@Model.PlannedReleaseDate.ToString("d")</dd></div>
-            <div><dt>Type / priority</dt><dd>@Model.ReleaseType / @Model.Priority</dd></div>
-            <div><dt>Risk</dt><dd>@Model.RiskLevel</dd></div>
+            <div><dt>Planned window</dt><dd>@Model.PlannedWindowStart.ToString("g") – @Model.PlannedWindowEnd.ToString("g")</dd></div>
+            <div><dt>Track / category / mode</dt><dd>Application / <strong>@Model.PreviewCategory</strong> / @Model.ExecutionMode</dd></div>
+            <div><dt>Recovery approach</dt><dd>@Model.RecoveryApproach</dd></div>
             <div><dt>Services</dt><dd>@Model.Services.Count(service => service.ServiceId != Guid.Empty)</dd></div>
+            <div><dt>Source links</dt><dd>@Model.References.Count(reference => !string.IsNullOrWhiteSpace(reference.ExternalId))</dd></div>
+            <div><dt>Planned maintenance</dt><dd>@(Model.PlannedMaintenance ? "Yes" : "No")</dd></div>
+            <div><dt>Security triggers</dt><dd>@(Model.Triggers.Count == 0 ? "None" : string.Join(", ", Model.Triggers))</dd></div>
         </dl>
         <hr />
         <h3 class="h6">Description</h3>
@@ -176,7 +346,7 @@
             {
                 <button type="submit" name="action" value="previous" class="btn btn-outline-secondary">Previous</button>
             }
-            @if (Model.Step < 5)
+            @if (Model.Step < 6)
             {
                 <button type="submit" name="action" value="next" class="btn btn-accent">Next</button>
             }
@@ -237,6 +407,35 @@
                     <label class="form-check-label" data-cfg-label>Configuration changes</label>
                 </div>
             </div>
+        </div>
+    </div>
+</template>
+
+<template id="reference-row-template">
+    <div class="row g-2 align-items-end mb-2" data-reference-row>
+        <div class="col-md-3">
+            <label class="form-label">Type</label>
+            <select name="References[__index__].ReferenceType" class="form-select">
+                @foreach (var type in referenceTypes)
+                {
+                    <option value="@type">@type</option>
+                }
+            </select>
+        </div>
+        <div class="col-md-2">
+            <label class="form-label">ID</label>
+            <input name="References[__index__].ExternalId" class="form-control" />
+        </div>
+        <div class="col-md-4">
+            <label class="form-label">URL</label>
+            <input name="References[__index__].Url" class="form-control" />
+        </div>
+        <div class="col-md-2">
+            <label class="form-label">Title</label>
+            <input name="References[__index__].Title" class="form-control" />
+        </div>
+        <div class="col-md-1">
+            <button type="button" class="btn btn-outline-danger w-100" data-remove-reference>×</button>
         </div>
     </div>
 </template>

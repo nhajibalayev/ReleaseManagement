@@ -27,7 +27,11 @@ public enum ReleaseStatus
     RiskReview = 23,
     RiskChangesRequired = 24,
     ChapterLeadReview = 25,
-    ChapterLeadChangesRequired = 26
+    ChapterLeadChangesRequired = 26,
+
+    // Procedure v4.0 alignment: readiness-checklist model (§5) and post-release stabilization (§7.2).
+    ReadinessInProgress = 27,
+    Stabilization = 28
 }
 
 public enum ReleaseType

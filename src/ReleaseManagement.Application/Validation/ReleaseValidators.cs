@@ -22,9 +22,41 @@ public sealed class CreateReleaseDraftRequestValidator : AbstractValidator<Creat
         RuleFor(request => request.EnvironmentId)
             .NotEmpty();
 
-        RuleFor(request => request.PlannedReleaseDateUtc)
+        RuleFor(request => request.PlannedWindowStartUtc)
             .Must(date => date.Kind == DateTimeKind.Utc)
-            .WithMessage("Planned release date must be UTC.");
+            .WithMessage("Planned window start must be UTC.");
+
+        RuleFor(request => request.PlannedWindowEndUtc)
+            .Must(date => date.Kind == DateTimeKind.Utc)
+            .WithMessage("Planned window end must be UTC.")
+            .GreaterThan(request => request.PlannedWindowStartUtc)
+            .WithMessage("Planned window end must be after the window start.");
+
+        RuleFor(request => request.ExpeditedJustification)
+            .NotEmpty()
+            .When(request => request.ExecutionMode == ExecutionMode.Expedited)
+            .WithMessage("Expedited execution requires an urgency justification (§6.2).");
+
+        RuleFor(request => request.ExpeditedJustification)
+            .MaximumLength(2000);
+
+        RuleFor(request => request.DirectorApprovalReference)
+            .MaximumLength(500);
+
+        RuleFor(request => request.MaintenanceApprovalReference)
+            .MaximumLength(500);
+
+        RuleFor(request => request.KeyDependencies)
+            .MaximumLength(2000);
+
+        RuleFor(request => request.RecoveryDecisionPoints)
+            .MaximumLength(4000);
+
+        RuleFor(request => request.RecoveryResponsibleParties)
+            .MaximumLength(1000);
+
+        RuleForEach(request => request.References)
+            .SetValidator(new ReleaseReferenceInputDtoValidator());
 
         RuleFor(request => request.ReleaseVersion)
             .MaximumLength(100);
@@ -110,6 +142,21 @@ public sealed class ReleaseServiceInputDtoValidator : AbstractValidator<ReleaseS
 
         RuleFor(service => service.Notes)
             .MaximumLength(2000);
+    }
+}
+
+public sealed class ReleaseReferenceInputDtoValidator : AbstractValidator<ReleaseReferenceInputDto>
+{
+    public ReleaseReferenceInputDtoValidator()
+    {
+        RuleFor(reference => reference.ExternalId)
+            .MaximumLength(200);
+
+        RuleFor(reference => reference.Url)
+            .MaximumLength(2048);
+
+        RuleFor(reference => reference.Title)
+            .MaximumLength(500);
     }
 }
 

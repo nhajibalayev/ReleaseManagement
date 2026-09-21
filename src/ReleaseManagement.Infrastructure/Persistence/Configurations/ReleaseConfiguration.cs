@@ -31,6 +31,38 @@ public sealed class ReleaseConfiguration : IEntityTypeConfiguration<Release>
         builder.Property(x => x.Priority).HasConversion<int>();
         builder.Property(x => x.RiskLevel).HasConversion<int>();
 
+        // Procedure v4.0 fields.
+        builder.Property(x => x.Track).HasConversion<int>();
+        builder.Property(x => x.Category).HasConversion<int>();
+        builder.Property(x => x.ClassificationCriteria).HasConversion<int>();
+        builder.Property(x => x.ExecutionMode).HasConversion<int>();
+        builder.Property(x => x.SecurityTriggers).HasConversion<int>();
+        builder.Property(x => x.RecoveryApproach).HasConversion<int>();
+        builder.Property(x => x.Outcome).HasConversion<int>();
+        builder.Property(x => x.ExpeditedJustification).HasMaxLength(2000);
+        builder.Property(x => x.DirectorApprovalReference).HasMaxLength(500);
+        builder.Property(x => x.MaintenanceApprovalReference).HasMaxLength(500);
+        builder.Property(x => x.KeyDependencies).HasMaxLength(2000).IsRequired();
+        builder.Property(x => x.RecoveryDecisionPoints).HasMaxLength(4000).IsRequired();
+        builder.Property(x => x.RecoveryResponsibleParties).HasMaxLength(1000).IsRequired();
+        builder.Property(x => x.StabilizationNotes).HasMaxLength(2000);
+        builder.Property(x => x.OutcomeNotes).HasMaxLength(4000);
+        builder.Ignore(x => x.IsExpedited);
+        builder.Ignore(x => x.HasDatabaseChanges);
+        ConfigureUtc(builder.Property(x => x.PlannedWindowStart));
+        ConfigureUtc(builder.Property(x => x.PlannedWindowEnd));
+        ConfigureUtc(builder.Property(x => x.ActualWindowStart));
+        ConfigureUtc(builder.Property(x => x.ActualWindowEnd));
+        ConfigureUtc(builder.Property(x => x.StabilizationStart));
+        ConfigureUtc(builder.Property(x => x.StabilizationEnd));
+        builder.HasIndex(x => x.Category);
+        builder.HasIndex(x => x.TechnicalOwnerUserId);
+        builder.HasIndex(x => x.ForecastId);
+        builder.HasOne<ApplicationUser>().WithMany().HasForeignKey(x => x.TechnicalOwnerUserId)
+            .OnDelete(DeleteBehavior.Restrict);
+        builder.HasOne<ApplicationUser>().WithMany().HasForeignKey(x => x.ReleaseManagerUserId)
+            .OnDelete(DeleteBehavior.Restrict);
+
         ConfigureUtc(builder.Property(x => x.PlannedReleaseDate));
         ConfigureUtc(builder.Property(x => x.ActualReleaseDate));
         ConfigureUtc(builder.Property(x => x.SubmittedDate));
@@ -61,6 +93,9 @@ public sealed class ReleaseConfiguration : IEntityTypeConfiguration<Release>
         ConfigureCollection(builder, x => x.Attachments, "_attachments", DeleteBehavior.Restrict);
         ConfigureCollection(builder, x => x.StatusHistory, "_statusHistory", DeleteBehavior.Restrict);
         ConfigureCollection(builder, x => x.DeploymentRecords, "_deploymentRecords", DeleteBehavior.Restrict);
+        ConfigureCollection(builder, x => x.References, "_references", DeleteBehavior.Cascade);
+        ConfigureCollection(builder, x => x.ReadinessControls, "_readinessControls", DeleteBehavior.Cascade);
+        ConfigureCollection(builder, x => x.Communications, "_communications", DeleteBehavior.Cascade);
     }
 
     private static void ConfigureCollection<T>(

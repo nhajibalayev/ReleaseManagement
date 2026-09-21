@@ -1,31 +1,58 @@
-@model PendingApprovalsPageViewModel
+@model PendingWorkPageViewModel
 @{
-    ViewData["Title"] = "Pending Approvals";
+    ViewData["Title"] = "My Readiness Work";
 }
 
 <div class="mb-3">
-    <h1 class="h3 mb-1">Pending Approvals</h1>
-    <p class="text-muted mb-0">Release reviews currently assigned to you.</p>
+    <h1 class="h3 mb-1">My readiness work</h1>
+    <p class="text-muted mb-0">Releases where your role owns a readiness control that is still pending (§5). Set the status and link the evidence on the release's Readiness tab.</p>
 </div>
 <section class="panel">
     <div class="table-responsive">
         <table class="table table-hover align-middle mb-0">
-            <thead><tr><th>Release</th><th>Product</th><th>Approval</th><th>Requested</th><th>Planned date</th><th>SLA due</th><th></th></tr></thead>
+            <thead><tr><th>Release</th><th>Product</th><th>Category / mode</th><th>Planned window</th><th>Controls waiting for you</th><th></th></tr></thead>
             <tbody>
-            @foreach (var item in Model.Items)
+            @foreach (var item in Model.Readiness)
             {
                 <tr>
                     <td><strong>@item.ReleaseNumber</strong><div class="small text-muted">@item.Title</div></td>
                     <td>@(item.ProductName ?? "—")</td>
-                    <td><span class="status-badge action">@item.ApprovalType</span></td>
-                    <td>@item.RequestedDate.ToLocalTime().ToString("g")</td>
-                    <td>@item.PlannedReleaseDate.ToLocalTime().ToString("g")</td>
-                    <td>@(item.SlaDueDate?.ToLocalTime().ToString("g") ?? "—")</td>
-                    <td class="text-end"><a asp-controller="Releases" asp-action="Details" asp-route-id="@item.ReleaseId" class="btn btn-sm btn-accent">Review</a></td>
+                    <td><span class="status-badge @(item.Category == ReleaseCategory.Major ? "danger" : "")">@item.Category</span> <span class="status-badge">@item.ExecutionMode</span></td>
+                    <td>@item.PlannedWindowStart.ToLocalTime().ToString("g")</td>
+                    <td>@item.PendingControls</td>
+                    <td class="text-end"><a asp-controller="Releases" asp-action="Details" asp-route-id="@item.ReleaseId" class="btn btn-sm btn-accent">Open</a></td>
                 </tr>
             }
-            @if (!Model.Items.Any()) { <tr><td colspan="7" class="text-center text-muted py-4">No pending approvals.</td></tr> }
+            @if (!Model.Readiness.Any()) { <tr><td colspan="6" class="text-center text-muted py-4">Nothing is waiting for you.</td></tr> }
             </tbody>
         </table>
     </div>
 </section>
+
+@if (Model.Legacy.Any())
+{
+    <div class="mb-3 mt-4">
+        <h2 class="h5 mb-1">Release Manager queue / legacy approvals</h2>
+        <p class="text-muted mb-0">Submitted records waiting for the Release Manager, plus releases still in the old in-app approval flow.</p>
+    </div>
+    <section class="panel">
+        <div class="table-responsive">
+            <table class="table table-hover align-middle mb-0">
+                <thead><tr><th>Release</th><th>Product</th><th>Stage</th><th>Requested</th><th>Planned date</th><th></th></tr></thead>
+                <tbody>
+                @foreach (var item in Model.Legacy)
+                {
+                    <tr>
+                        <td><strong>@item.ReleaseNumber</strong><div class="small text-muted">@item.Title</div></td>
+                        <td>@(item.ProductName ?? "—")</td>
+                        <td><span class="status-badge action">@item.ApprovalType</span></td>
+                        <td>@item.RequestedDate.ToLocalTime().ToString("g")</td>
+                        <td>@item.PlannedReleaseDate.ToLocalTime().ToString("g")</td>
+                        <td class="text-end"><a asp-controller="Releases" asp-action="Details" asp-route-id="@item.ReleaseId" class="btn btn-sm btn-accent">Review</a></td>
+                    </tr>
+                }
+                </tbody>
+            </table>
+        </div>
+    </section>
+}

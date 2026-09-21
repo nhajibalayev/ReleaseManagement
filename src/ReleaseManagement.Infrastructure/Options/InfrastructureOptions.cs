@@ -26,6 +26,16 @@ public sealed class WindowsAuthOptions
 
     /// <summary>Default app role for newly provisioned AD users.</summary>
     public string DefaultRole { get; set; } = "ProductOwner";
+
+    /// <summary>
+    /// "Real" (default) validates against the domain; "Mock" accepts any user name whose
+    /// password equals <see cref="MockPassword"/> (non-corporate development machines).
+    /// </summary>
+    public string Mode { get; set; } = "Real";
+
+    public string MockPassword { get; set; } = "Mock!123";
+
+    public bool IsMock => string.Equals(Mode, "Mock", StringComparison.OrdinalIgnoreCase);
 }
 
 public sealed class AzureAdOptions
@@ -106,6 +116,20 @@ public sealed class AzureDevOpsOptions
     /// with the signed-in user's credentials.
     /// </summary>
     public bool RequireProjectAccessToCreate { get; set; } = true;
+
+    /// <summary>
+    /// "Real" (default) calls Azure DevOps Server; "Mock" keeps work items in memory so the
+    /// platform can run on a machine without corporate network / AD access.
+    /// </summary>
+    public string Mode { get; set; } = "Real";
+
+    /// <summary>
+    /// Procedure v4.0 §1.3: the Release Record links to existing Boards work items instead of
+    /// creating a governance work item. Off by default; enable only where the board needs a mirror item.
+    /// </summary>
+    public bool CreateWorkItemOnSubmit { get; set; }
+
+    public bool IsMock => string.Equals(Mode, "Mock", StringComparison.OrdinalIgnoreCase);
 }
 
 public sealed class EmailOptions

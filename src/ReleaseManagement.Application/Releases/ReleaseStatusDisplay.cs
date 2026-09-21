@@ -33,6 +33,8 @@ public static class ReleaseStatusDisplay
         ReleaseStatus.Rejected => "Rejected",
         ReleaseStatus.Closed => "Closed",
         ReleaseStatus.Cancelled => "Cancelled",
+        ReleaseStatus.ReadinessInProgress => "Readiness In Progress",
+        ReleaseStatus.Stabilization => "Stabilization",
         _ => status.ToString()
     };
 
@@ -43,12 +45,14 @@ public static class ReleaseStatusDisplay
         ReleaseStatus.RiskReview => "Send to Risk",
         ReleaseStatus.ChapterLeadReview => "Send to Chapter Lead",
         ReleaseStatus.ReturnedForRevision => "Return to team",
-        ReleaseStatus.Approved => "Mark as approved (finish reviews)",
+        ReleaseStatus.ReadinessInProgress => "Accept record and start readiness",
+        ReleaseStatus.Stabilization => "Start stabilization period",
+        ReleaseStatus.Approved => "Mark as approved (legacy)",
         ReleaseStatus.Rejected => "Reject release",
         ReleaseStatus.Cancelled => "Cancel release",
         ReleaseStatus.ReleaseManagerReview => "Return to Release Manager",
         ReleaseStatus.Submitted => "Resubmit to Release Manager",
-        ReleaseStatus.ReadyForRelease => "Mark ready for release",
+        ReleaseStatus.ReadyForRelease => "Mark ready for release (all controls closed)",
         ReleaseStatus.DeploymentInProgress => "Start deployment",
         ReleaseStatus.Deployed => "Mark deployed",
         ReleaseStatus.DeploymentFailed => "Mark deployment failed",
@@ -81,6 +85,8 @@ public static class ReleaseStatusDisplay
         ReleaseStatus.ChapterLeadReview => RoleNames.ChapterLead,
         ReleaseStatus.ChapterLeadChangesRequired => RoleNames.ProductOwner,
         ReleaseStatus.Approved => RoleNames.ReleaseManager,
+        ReleaseStatus.ReadinessInProgress => RoleNames.ReleaseManager,
+        ReleaseStatus.Stabilization => RoleNames.ReleaseManager,
         ReleaseStatus.ReadyForRelease => RoleNames.DevOps,
         ReleaseStatus.DeploymentInProgress => RoleNames.DevOps,
         ReleaseStatus.Deployed => RoleNames.ReleaseManager,
@@ -97,7 +103,9 @@ public static class ReleaseStatusDisplay
     {
         ReleaseStatus.Draft => Format(ReleaseStatus.Submitted),
         ReleaseStatus.Submitted => Format(ReleaseStatus.ReleaseManagerReview),
-        ReleaseStatus.ReleaseManagerReview => "RM chooses next structure",
+        ReleaseStatus.ReleaseManagerReview => Format(ReleaseStatus.ReadinessInProgress),
+        ReleaseStatus.ReadinessInProgress => Format(ReleaseStatus.ReadyForRelease),
+        ReleaseStatus.Stabilization => Format(ReleaseStatus.Closed),
         ReleaseStatus.ReturnedForRevision => Format(ReleaseStatus.Submitted),
         ReleaseStatus.QaReview => Format(ReleaseStatus.ReleaseManagerReview),
         ReleaseStatus.QaChangesRequired => Format(ReleaseStatus.QaReview),
@@ -111,12 +119,12 @@ public static class ReleaseStatusDisplay
         ReleaseStatus.PentestChangesRequired => Format(ReleaseStatus.PentestReview),
         ReleaseStatus.BusinessApproval => Format(ReleaseStatus.ReleaseManagerReview),
         ReleaseStatus.BusinessChangesRequired => Format(ReleaseStatus.BusinessApproval),
-        ReleaseStatus.Approved => Format(ReleaseStatus.ReadyForRelease),
+        ReleaseStatus.Approved => Format(ReleaseStatus.ReadinessInProgress),
         ReleaseStatus.ReadyForRelease => Format(ReleaseStatus.DeploymentInProgress),
         ReleaseStatus.DeploymentInProgress => Format(ReleaseStatus.Deployed),
         ReleaseStatus.DeploymentFailed => Format(ReleaseStatus.RollbackInProgress),
         ReleaseStatus.RollbackInProgress => Format(ReleaseStatus.RolledBack),
-        ReleaseStatus.Deployed => Format(ReleaseStatus.Closed),
+        ReleaseStatus.Deployed => Format(ReleaseStatus.Stabilization),
         _ => null
     };
 
@@ -149,6 +157,9 @@ public static class ReleaseStatusDisplay
                 RoleNames.QA => "QA",
                 RoleNames.Risk => "Risk",
                 RoleNames.ChapterLead => "Chapter Lead",
+                RoleNames.TechnicalOwner => "Technical Owner",
+                RoleNames.DBA => "DBA / Data Engineering",
+                RoleNames.ITOperations => "IT Operations",
                 _ => role
             };
         }

@@ -1,6 +1,18 @@
+using ReleaseManagement.Application.DTOs.Procedure;
 using ReleaseManagement.Domain.Enums;
 
 namespace ReleaseManagement.Application.DTOs.Releases;
+
+public sealed class ReleaseReferenceInputDto
+{
+    public ReleaseReferenceType ReferenceType { get; set; } = ReleaseReferenceType.WorkItem;
+
+    public string ExternalId { get; set; } = string.Empty;
+
+    public string? Url { get; set; }
+
+    public string? Title { get; set; }
+}
 
 public sealed class ReleaseServiceInputDto
 {
@@ -66,6 +78,42 @@ public class CreateReleaseDraftRequest
     public int? ExpectedDowntimeMinutes { get; set; }
 
     public IList<ReleaseServiceInputDto> Services { get; set; } = [];
+
+    // ---- Procedure v4.0 fields ----
+
+    public ClassificationCriteria ClassificationCriteria { get; set; } = ClassificationCriteria.None;
+
+    public SecurityTriggers SecurityTriggers { get; set; } = SecurityTriggers.None;
+
+    public ExecutionMode ExecutionMode { get; set; } = ExecutionMode.Planned;
+
+    public string? ExpeditedJustification { get; set; }
+
+    public string? DirectorApprovalReference { get; set; }
+
+    public DateTime PlannedWindowStartUtc { get; set; }
+
+    public DateTime PlannedWindowEndUtc { get; set; }
+
+    public bool PlannedMaintenance { get; set; }
+
+    public string? MaintenanceApprovalReference { get; set; }
+
+    public bool OperationalImpact { get; set; }
+
+    public string? KeyDependencies { get; set; }
+
+    public RecoveryApproach RecoveryApproach { get; set; } = RecoveryApproach.StandardPipelineRollback;
+
+    public string? RecoveryDecisionPoints { get; set; }
+
+    public string? RecoveryResponsibleParties { get; set; }
+
+    public Guid? TechnicalOwnerUserId { get; set; }
+
+    public Guid? ForecastId { get; set; }
+
+    public IList<ReleaseReferenceInputDto> References { get; set; } = [];
 }
 
 public sealed class UpdateReleaseDraftRequest : CreateReleaseDraftRequest
@@ -82,6 +130,11 @@ public sealed class TransitionReleaseRequest
     public string? Comment { get; set; }
 
     public Guid? AssignedUserId { get; set; }
+
+    /// <summary>§7.2 — used when moving to Stabilization; defaults by category when empty.</summary>
+    public DateTime? StabilizationEndUtc { get; set; }
+
+    public string? StabilizationNotes { get; set; }
 }
 
 public sealed class ReleaseListItemDto
@@ -113,6 +166,10 @@ public sealed class ReleaseListItemDto
     public DateTime UpdatedDate { get; init; }
 
     public bool ActionRequiredFromCurrentUser { get; init; }
+
+    public ReleaseCategory Category { get; init; }
+
+    public ExecutionMode ExecutionMode { get; init; }
 }
 
 public sealed class ReleaseStatusSummaryDto
@@ -199,4 +256,77 @@ public sealed class ReleaseDetailsDto
     public IReadOnlyCollection<ReleaseServiceInputDto> Services { get; init; } = [];
 
     public IReadOnlyCollection<ReleaseStatus> AllowedTransitions { get; init; } = [];
+
+    // ---- Procedure v4.0 fields ----
+
+    public ReleaseTrack Track { get; init; }
+
+    public ReleaseCategory Category { get; init; }
+
+    public ClassificationCriteria ClassificationCriteria { get; init; }
+
+    public SecurityTriggers SecurityTriggers { get; init; }
+
+    public ExecutionMode ExecutionMode { get; init; }
+
+    public string? ExpeditedJustification { get; init; }
+
+    public string? DirectorApprovalReference { get; init; }
+
+    public Guid? TechnicalOwnerUserId { get; init; }
+
+    public Guid? ReleaseManagerUserId { get; init; }
+
+    public DateTime PlannedWindowStart { get; init; }
+
+    public DateTime PlannedWindowEnd { get; init; }
+
+    public DateTime? ActualWindowStart { get; init; }
+
+    public DateTime? ActualWindowEnd { get; init; }
+
+    public bool PlannedMaintenance { get; init; }
+
+    public string? MaintenanceApprovalReference { get; init; }
+
+    public bool OperationalImpact { get; init; }
+
+    public string KeyDependencies { get; init; } = string.Empty;
+
+    public RecoveryApproach RecoveryApproach { get; init; }
+
+    public string RecoveryDecisionPoints { get; init; } = string.Empty;
+
+    public string RecoveryResponsibleParties { get; init; } = string.Empty;
+
+    public DateTime? StabilizationStart { get; init; }
+
+    public DateTime? StabilizationEnd { get; init; }
+
+    public string? StabilizationNotes { get; init; }
+
+    public ReleaseOutcome? Outcome { get; init; }
+
+    public string? OutcomeNotes { get; init; }
+
+    public Guid? ForecastId { get; init; }
+
+    public IReadOnlyCollection<ReleaseReferenceDto> References { get; init; } = [];
+
+    public IReadOnlyCollection<ReadinessControlDto> ReadinessControls { get; init; } = [];
+
+    public IReadOnlyCollection<ReleaseCommunicationDto> Communications { get; init; } = [];
+
+    public PostReleaseValidationDto Validation { get; init; } = new();
+
+    public PostImplementationReviewDto? Review { get; init; }
+
+    public IReadOnlyCollection<FreezeConflictDto> FreezeConflicts { get; init; } = [];
+
+    /// <summary>Blocking reasons for the next gate (ready / stabilization / closure) — shown to the RM.</summary>
+    public IReadOnlyCollection<string> GateErrors { get; init; } = [];
+
+    public bool RequiresPreReleaseCommunication { get; init; }
+
+    public bool RequiresBusinessValidation { get; init; }
 }

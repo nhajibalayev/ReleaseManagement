@@ -5,6 +5,9 @@ using ReleaseManagement.Application.Abstractions;
 using ReleaseManagement.Application.Authorization;
 using ReleaseManagement.Application.Common;
 using ReleaseManagement.Application.DTOs.Releases;
+using ReleaseManagement.Application.Planning;
+using ReleaseManagement.Application.PostRelease;
+using ReleaseManagement.Application.Readiness;
 using ReleaseManagement.Domain.Constants;
 using ReleaseManagement.Domain.Entities;
 using ReleaseManagement.Domain.Enums;
@@ -25,6 +28,9 @@ public sealed class ReleaseWorkflowService : IReleaseWorkflowService
     private readonly IBackgroundJobSettings _backgroundJobs;
     private readonly IAzureDevOpsReleaseSyncService _azureDevOpsSync;
     private readonly IValidator<TransitionReleaseRequest> _transitionValidator;
+    private readonly IReadinessService _readiness;
+    private readonly IPostReleaseService _postRelease;
+    private readonly IPlanningService _planning;
 
     public ReleaseWorkflowService(
         IApplicationDbContext dbContext,
@@ -37,7 +43,10 @@ public sealed class ReleaseWorkflowService : IReleaseWorkflowService
         IAzureDevOpsTokenProvider azureDevOpsTokenProvider,
         IBackgroundJobSettings backgroundJobs,
         IAzureDevOpsReleaseSyncService azureDevOpsSync,
-        IValidator<TransitionReleaseRequest> transitionValidator)
+        IValidator<TransitionReleaseRequest> transitionValidator,
+        IReadinessService readiness,
+        IPostReleaseService postRelease,
+        IPlanningService planning)
     {
         _dbContext = dbContext;
         _currentUser = currentUser;
@@ -50,6 +59,9 @@ public sealed class ReleaseWorkflowService : IReleaseWorkflowService
         _backgroundJobs = backgroundJobs;
         _azureDevOpsSync = azureDevOpsSync;
         _transitionValidator = transitionValidator;
+        _readiness = readiness;
+        _postRelease = postRelease;
+        _planning = planning;
     }
 
     public bool CanTransition(
@@ -85,7 +97,12 @@ public sealed class ReleaseWorkflowService : IReleaseWorkflowService
         await _authorization.EnsureCanViewAsync(request.ReleaseId, cancellationToken);
 
         var release = await _dbContext.Releases
+            .Include(item => item.Services)
             .Include(item => item.Approvals)
+            .Include(item => item.References)
+            .Include(item => item.ReadinessControls)
+            .Include(item => item.Communications)
+            .Include(item => item.DeploymentRecords)
             .SingleOrDefaultAsync(item => item.Id == request.ReleaseId, cancellationToken);
 
         if (release is null)
@@ -99,7 +116,7 @@ public sealed class ReleaseWorkflowService : IReleaseWorkflowService
                 $"Transition from {release.CurrentStatus} to {request.TargetStatus} is not allowed for the current user.");
         }
 
-        await EnsureDeploymentApprovalsAsync(release, request.TargetStatus, cancellationToken);
+        await EnsureGateAsync(release, request, cancellationToken);
 
         var previousStatus = release.CurrentStatus;
         var responsibleRole = ReleaseStatusDisplay.GetDefaultResponsibleRole(request.TargetStatus);
@@ -131,6 +148,7 @@ public sealed class ReleaseWorkflowService : IReleaseWorkflowService
                     _clock.UtcNow));
         }
 
+        await ApplyPostTransitionEffectsAsync(release, previousStatus, request, cancellationToken);
         await EnsureApprovalRecordAsync(release, previousStatus, request, cancellationToken);
         await NotifyStakeholdersAsync(release, previousStatus, request.Comment, cancellationToken);
 
@@ -193,6 +211,11 @@ public sealed class ReleaseWorkflowService : IReleaseWorkflowService
                 _dbContext.Detach(service);
             }
 
+            foreach (var reference in tracked.References.ToArray())
+            {
+                _dbContext.Detach(reference);
+            }
+
             foreach (var approval in tracked.Approvals.ToArray())
             {
                 _dbContext.Detach(approval);
@@ -209,6 +232,9 @@ public sealed class ReleaseWorkflowService : IReleaseWorkflowService
         var release = await _dbContext.Releases
             .Include(item => item.Services)
             .Include(item => item.Approvals)
+            .Include(item => item.References)
+            .Include(item => item.ReadinessControls)
+            .Include(item => item.Communications)
             .SingleOrDefaultAsync(item => item.Id == releaseId, cancellationToken);
 
         if (release is null)
@@ -239,6 +265,8 @@ public sealed class ReleaseWorkflowService : IReleaseWorkflowService
         {
             throw new BusinessRuleException(readinessErrors);
         }
+
+        await EnsureNoFreezeConflictAsync(release, cancellationToken);
 
         if (!CanTransition(release.CurrentStatus, ReleaseStatus.Submitted, _currentUser.Roles))
         {
@@ -293,8 +321,8 @@ public sealed class ReleaseWorkflowService : IReleaseWorkflowService
             await _notifications.CreateForRoleAsync(
                 RoleNames.ReleaseManager,
                 release.Id,
-                "Release ready for review",
-                $"{release.ReleaseNumber} has been submitted and awaits Release Manager review.",
+                "Release record submitted",
+                $"{release.ReleaseNumber} ({release.Category}, {release.ExecutionMode}) has been submitted. Check the minimum record and start readiness.",
                 NotificationType.ActionRequired,
                 cancellationToken);
 
@@ -339,6 +367,248 @@ public sealed class ReleaseWorkflowService : IReleaseWorkflowService
         await _dbContext.SaveChangesAsync(cancellationToken);
     }
 
+    // ------------------------------------------------------------------ gates (§8.1 hard block)
+
+    private async Task EnsureGateAsync(
+        Release release,
+        TransitionReleaseRequest request,
+        CancellationToken cancellationToken)
+    {
+        switch (request.TargetStatus)
+        {
+            case ReleaseStatus.ReadyForRelease:
+            {
+                var environment = await _dbContext.Environments
+                    .AsNoTracking()
+                    .SingleAsync(item => item.Id == release.EnvironmentId, cancellationToken);
+
+                var errors = ReleaseReadinessRules.GetReadyForReleaseErrors(release, environment.IsProduction);
+                if (errors.Count > 0)
+                {
+                    throw new BusinessRuleException(errors);
+                }
+
+                await EnsureNoFreezeConflictAsync(release, cancellationToken);
+                break;
+            }
+
+            case ReleaseStatus.DeploymentInProgress:
+            {
+                if (release.ReadinessControls.Count > 0 &&
+                    release.ReadinessControls.Any(item => !item.IsClosed))
+                {
+                    throw new BusinessRuleException(
+                        "Deployment cannot start while readiness controls are open (§8.1).");
+                }
+
+                await EnsureNoFreezeConflictAsync(release, cancellationToken);
+                break;
+            }
+
+            case ReleaseStatus.Stabilization:
+            {
+                var validation = await _dbContext.PostReleaseValidations
+                    .AsNoTracking()
+                    .SingleOrDefaultAsync(item => item.ReleaseId == release.Id, cancellationToken);
+
+                var errors = ReleaseReadinessRules.GetStabilizationErrors(release, validation);
+                if (errors.Count > 0)
+                {
+                    throw new BusinessRuleException(errors);
+                }
+
+                break;
+            }
+
+            case ReleaseStatus.Closed:
+            {
+                var validation = await _dbContext.PostReleaseValidations
+                    .AsNoTracking()
+                    .SingleOrDefaultAsync(item => item.ReleaseId == release.Id, cancellationToken);
+
+                var review = await _dbContext.PostImplementationReviews
+                    .AsNoTracking()
+                    .SingleOrDefaultAsync(item => item.ReleaseId == release.Id, cancellationToken);
+
+                // Outcome defaults to Successful when validation passed and no recovery happened.
+                if (release.Outcome is null && validation is { IsPassed: true })
+                {
+                    release.RecordOutcome(ReleaseOutcome.Successful, null, _clock.UtcNow);
+                }
+
+                var errors = ReleaseReadinessRules.GetClosureErrors(release, validation, review, _clock.UtcNow);
+                if (errors.Count > 0)
+                {
+                    throw new BusinessRuleException(errors);
+                }
+
+                break;
+            }
+        }
+    }
+
+    private async Task EnsureNoFreezeConflictAsync(Release release, CancellationToken cancellationToken)
+    {
+        var conflicts = await _planning.GetFreezeConflictsAsync(
+            release.Id,
+            release.PlannedWindowStart,
+            release.PlannedWindowEnd,
+            cancellationToken);
+
+        var blocking = conflicts.Where(item => !item.HasException).ToArray();
+        if (blocking.Length == 0)
+        {
+            return;
+        }
+
+        var names = string.Join(", ", blocking.Select(item => $"{item.Name} ({item.FreezeType}, {item.StartDate:d}–{item.EndDate:d}, authority: {item.Authority})"));
+        throw new BusinessRuleException(
+            $"The planned window falls into an active release freeze: {names}. Reschedule the window or record an exception approved by the freeze authority (§6.3).");
+    }
+
+    // ------------------------------------------------------------------ side effects
+
+    private async Task ApplyPostTransitionEffectsAsync(
+        Release release,
+        ReleaseStatus previousStatus,
+        TransitionReleaseRequest request,
+        CancellationToken cancellationToken)
+    {
+        var now = _clock.UtcNow;
+
+        switch (release.CurrentStatus)
+        {
+            case ReleaseStatus.ReadinessInProgress:
+            {
+                // RM takes coordination ownership; TO defaults to RM when nobody is assigned (same person today).
+                release.AssignOwners(
+                    release.TechnicalOwnerUserId ?? _currentUser.UserId,
+                    release.ReleaseManagerUserId ?? _currentUser.UserId,
+                    now);
+
+                _readiness.EnsureControls(release, now);
+
+                foreach (var control in release.ReadinessControls.Where(item => item.IsRequired && !item.IsClosed))
+                {
+                    var definition = ReleaseReadinessRules.GetDefinition(control.ControlType);
+                    await _notifications.CreateForRoleAsync(
+                        definition.OwnerRole,
+                        release.Id,
+                        $"Release {release.ReleaseNumber}: {definition.Title} evidence required",
+                        $"Set the readiness status for '{definition.Title}' and link the evidence in the source system ({definition.ProcedureSection}).",
+                        NotificationType.ActionRequired,
+                        cancellationToken);
+                }
+
+                break;
+            }
+
+            case ReleaseStatus.Deployed:
+            {
+                var exists = await _dbContext.PostReleaseValidations
+                    .AnyAsync(item => item.ReleaseId == release.Id, cancellationToken);
+
+                if (!exists)
+                {
+                    _dbContext.PostReleaseValidations.Add(
+                        new PostReleaseValidation(
+                            Guid.NewGuid(),
+                            release.Id,
+                            ReleaseReadinessRules.RequiresBusinessValidation(release),
+                            now));
+                }
+
+                await _notifications.CreateForRoleAsync(
+                    RoleNames.TechnicalOwner,
+                    release.Id,
+                    $"Release {release.ReleaseNumber}: post-release validation required",
+                    "Record deployment result, health, smoke / technical validation, monitoring and recovery need (§7.2).",
+                    NotificationType.ActionRequired,
+                    cancellationToken);
+
+                if (ReleaseReadinessRules.RequiresBusinessValidation(release))
+                {
+                    await _notifications.CreateAsync(
+                        release.CreatedByUserId,
+                        release.Id,
+                        $"Release {release.ReleaseNumber}: business validation required",
+                        "Confirm the business-visible change works as expected (§7.2).",
+                        NotificationType.ActionRequired,
+                        cancellationToken);
+                }
+
+                if (release.IsExpedited)
+                {
+                    await _postRelease.EnsureReviewAsync(release, PirTriggers.Expedited, cancellationToken);
+                }
+
+                if (release.ForecastId is { } forecastId)
+                {
+                    var forecast = await _dbContext.ReleaseForecasts
+                        .SingleOrDefaultAsync(item => item.Id == forecastId, cancellationToken);
+                    forecast?.MarkDelivered(now);
+                }
+
+                break;
+            }
+
+            case ReleaseStatus.Stabilization:
+            {
+                var end = request.StabilizationEndUtc.HasValue
+                    ? DateTime.SpecifyKind(request.StabilizationEndUtc.Value, DateTimeKind.Utc)
+                    : now.Add(DefaultStabilizationPeriod(release.Category));
+
+                release.SetStabilization(now, end, request.StabilizationNotes, now);
+                break;
+            }
+
+            case ReleaseStatus.DeploymentFailed:
+            {
+                await _postRelease.EnsureReviewAsync(release, PirTriggers.FailedDeployment, cancellationToken);
+                break;
+            }
+
+            case ReleaseStatus.RolledBack:
+            {
+                await _postRelease.EnsureReviewAsync(release, PirTriggers.RollbackOrRemediation, cancellationToken);
+                break;
+            }
+
+            case ReleaseStatus.Cancelled:
+            {
+                if (release.ForecastId is { } forecastId)
+                {
+                    var forecast = await _dbContext.ReleaseForecasts
+                        .SingleOrDefaultAsync(item => item.Id == forecastId, cancellationToken);
+                    if (forecast is not null)
+                    {
+                        forecast.Update(
+                            forecast.Title,
+                            forecast.Category,
+                            forecast.Team,
+                            forecast.ExpectedDate,
+                            forecast.Dependencies,
+                            forecast.Notes,
+                            ForecastStatus.Cancelled,
+                            now);
+                    }
+                }
+
+                break;
+            }
+        }
+
+        _ = previousStatus;
+    }
+
+    /// <summary>§7.2 — no universal rule; defaults are only a starting point the RM can override.</summary>
+    private static TimeSpan DefaultStabilizationPeriod(ReleaseCategory category) => category switch
+    {
+        ReleaseCategory.Major => TimeSpan.FromHours(72),
+        ReleaseCategory.Normal => TimeSpan.FromHours(24),
+        _ => TimeSpan.FromHours(4)
+    };
+
     private static Guid? ResolveResponsibleUserId(
         ReleaseStatus targetStatus,
         Guid? assignedUserId,
@@ -362,34 +632,13 @@ public sealed class ReleaseWorkflowService : IReleaseWorkflowService
             : null;
     }
 
-    private async Task EnsureDeploymentApprovalsAsync(
-        Release release,
-        ReleaseStatus targetStatus,
-        CancellationToken cancellationToken)
-    {
-        if (targetStatus != ReleaseStatus.DeploymentInProgress)
-        {
-            return;
-        }
-
-        var approvals = await _dbContext.ReleaseApprovals
-            .AsNoTracking()
-            .Where(item => item.ReleaseId == release.Id)
-            .ToListAsync(cancellationToken);
-
-        if (!ReleaseReadinessRules.HasRequiredApprovals(approvals))
-        {
-            throw new BusinessRuleException(
-                "Deployment cannot start until all required approvals are completed.");
-        }
-    }
-
     private async Task EnsureApprovalRecordAsync(
         Release release,
         ReleaseStatus previousStatus,
         TransitionReleaseRequest request,
         CancellationToken cancellationToken)
     {
+        // Legacy in-app structure approvals (kept for releases still in those statuses).
         var approvalType = ReleaseStatusDisplay.MapStatusToApprovalType(previousStatus);
         if (approvalType is null)
         {
@@ -406,7 +655,6 @@ public sealed class ReleaseWorkflowService : IReleaseWorkflowService
             ReleaseStatus.RiskChangesRequired or
             ReleaseStatus.ChapterLeadChangesRequired => ApprovalStatus.ChangesRequired,
             ReleaseStatus.Rejected => ApprovalStatus.Rejected,
-            // Structure confirmed → back to RM (sequential orchestration).
             ReleaseStatus.ReleaseManagerReview when previousStatus is
                 ReleaseStatus.QaReview or
                 ReleaseStatus.InfoSecReview or
@@ -414,8 +662,6 @@ public sealed class ReleaseWorkflowService : IReleaseWorkflowService
                 ReleaseStatus.ChapterLeadReview or
                 ReleaseStatus.PentestReview or
                 ReleaseStatus.BusinessApproval
-                => ApprovalStatus.Approved,
-            ReleaseStatus.Approved when previousStatus == ReleaseStatus.ReleaseManagerReview
                 => ApprovalStatus.Approved,
             _ => null
         };

@@ -25,13 +25,36 @@ public sealed class CreateReleaseDraftRequestValidatorTests
         var request = CreateValidRequest();
         request.Title = " ";
         request.ProductId = Guid.Empty;
-        request.PlannedReleaseDateUtc = DateTime.Now;
+        request.PlannedWindowStartUtc = DateTime.Now;
 
         var result = _validator.TestValidate(request);
 
         result.ShouldHaveValidationErrorFor(item => item.Title);
         result.ShouldHaveValidationErrorFor(item => item.ProductId);
-        result.ShouldHaveValidationErrorFor(item => item.PlannedReleaseDateUtc);
+        result.ShouldHaveValidationErrorFor(item => item.PlannedWindowStartUtc);
+    }
+
+    [Fact]
+    public void Requires_window_end_after_start()
+    {
+        var request = CreateValidRequest();
+        request.PlannedWindowEndUtc = request.PlannedWindowStartUtc;
+
+        var result = _validator.TestValidate(request);
+
+        result.ShouldHaveValidationErrorFor(item => item.PlannedWindowEndUtc);
+    }
+
+    [Fact]
+    public void Requires_justification_for_expedited_mode()
+    {
+        var request = CreateValidRequest();
+        request.ExecutionMode = ExecutionMode.Expedited;
+        request.ExpeditedJustification = null;
+
+        var result = _validator.TestValidate(request);
+
+        result.ShouldHaveValidationErrorFor(item => item.ExpeditedJustification);
     }
 
     [Fact]
@@ -67,6 +90,8 @@ public sealed class CreateReleaseDraftRequestValidatorTests
             ProductId = Guid.NewGuid(),
             EnvironmentId = Guid.NewGuid(),
             PlannedReleaseDateUtc = new DateTime(2026, 8, 1, 10, 0, 0, DateTimeKind.Utc),
+            PlannedWindowStartUtc = new DateTime(2026, 8, 1, 10, 0, 0, DateTimeKind.Utc),
+            PlannedWindowEndUtc = new DateTime(2026, 8, 1, 12, 0, 0, DateTimeKind.Utc),
             RiskLevel = RiskLevel.Medium,
             Services =
             [

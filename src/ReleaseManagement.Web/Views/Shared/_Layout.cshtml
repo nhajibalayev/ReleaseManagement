@@ -22,9 +22,11 @@
                 <div class="nav-section-title">Workspace</div>
                 <a class="side-link" asp-controller="Home" asp-action="Index">Dashboard</a>
                 <a class="side-link" asp-controller="Releases" asp-action="My">My Release Requests</a>
-                <a class="side-link" asp-controller="Approvals" asp-action="Index">Pending Approvals</a>
-                <a class="side-link" asp-controller="Deployments" asp-action="Calendar">Deployment Calendar</a>
-                <a class="side-link" asp-controller="Reports" asp-action="Index">Reports</a>
+                <a class="side-link" asp-controller="Approvals" asp-action="Index">My Readiness Work</a>
+                <a class="side-link" asp-controller="Deployments" asp-action="Calendar">Release Calendar</a>
+                <a class="side-link" asp-controller="Forecasts" asp-action="Index">Quarterly Forecast</a>
+                <a class="side-link" asp-controller="Reviews" asp-action="Index">Post-Release Reviews</a>
+                <a class="side-link" asp-controller="Reports" asp-action="Index">KPIs</a>
                 <a class="side-link" asp-controller="Notifications" asp-action="Index">Notifications</a>
             </div>
             @if (CurrentUser.IsInRole("ReleaseManager") || CurrentUser.IsInRole("Administrator") || CurrentUser.IsInRole("Auditor"))
@@ -32,6 +34,7 @@
                 <div class="nav-section">
                     <div class="nav-section-title">Operations</div>
                     <a class="side-link" asp-controller="Releases" asp-action="Index">All Releases</a>
+                    <a class="side-link" asp-controller="Freezes" asp-action="Index">Freeze Periods</a>
                 </div>
             }
             @if (CurrentUser.IsInRole("Administrator"))

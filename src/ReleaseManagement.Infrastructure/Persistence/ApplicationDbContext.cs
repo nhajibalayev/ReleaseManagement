@@ -55,6 +55,24 @@ public sealed class ApplicationDbContext
 
     public DbSet<AzureDevOpsMapping> AzureDevOpsMappings => Set<AzureDevOpsMapping>();
 
+    public DbSet<ReleaseReference> ReleaseReferences => Set<ReleaseReference>();
+
+    public DbSet<ReadinessControl> ReadinessControls => Set<ReadinessControl>();
+
+    public DbSet<ReleaseCommunication> ReleaseCommunications => Set<ReleaseCommunication>();
+
+    public DbSet<PostReleaseValidation> PostReleaseValidations => Set<PostReleaseValidation>();
+
+    public DbSet<PostImplementationReview> PostImplementationReviews => Set<PostImplementationReview>();
+
+    public DbSet<PirAction> PirActions => Set<PirAction>();
+
+    public DbSet<ReleaseForecast> ReleaseForecasts => Set<ReleaseForecast>();
+
+    public DbSet<FreezePeriod> FreezePeriods => Set<FreezePeriod>();
+
+    public DbSet<FreezeException> FreezeExceptions => Set<FreezeException>();
+
     public DbSet<OutboxMessage> OutboxMessages => Set<OutboxMessage>();
 
     public DbSet<Role> AppRoles => Set<Role>();

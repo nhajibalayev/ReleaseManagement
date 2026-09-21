@@ -1,28 +1,52 @@
+@using ReleaseManagement.Domain.Rules
 @model ReleaseDetailsPageViewModel
 @{
     ViewData["Title"] = Model.ReleaseNumber;
+    var p = Model.Procedure;
     var approvalType = ReleaseStatusDisplay.MapStatusToApprovalType(Model.Status.CurrentStatus);
-    var isRmOrchestration = Model.Status.CurrentStatus == ReleaseStatus.ReleaseManagerReview;
+    var status = Model.Status.CurrentStatus;
+    var isReadiness = status is ReleaseStatus.ReadinessInProgress or ReleaseStatus.ReleaseManagerReview or ReleaseStatus.ReadyForRelease;
+    var isPostDeploy = status is ReleaseStatus.Deployed or ReleaseStatus.Stabilization;
+    var canReschedule = Model.IsReleaseManager && status is not (ReleaseStatus.DeploymentInProgress or ReleaseStatus.Deployed or ReleaseStatus.Stabilization or ReleaseStatus.DeploymentFailed or ReleaseStatus.RollbackInProgress or ReleaseStatus.Closed or ReleaseStatus.Cancelled or ReleaseStatus.Rejected or ReleaseStatus.RolledBack);
     var rootComments = Model.Comments.Where(c => c.ParentCommentId is null).ToArray();
     var repliesByParent = Model.Comments
         .Where(c => c.ParentCommentId.HasValue)
         .GroupBy(c => c.ParentCommentId!.Value)
         .ToDictionary(g => g.Key, g => g.ToArray());
+    var referenceTypes = Enum.GetValues<ReleaseReferenceType>();
+    var tabs = new[] { "General", "Readiness", "Links", "Communication", "Validation", "Services", "Comments", "Attachments", "History", "Deployment" };
+
+    string ControlBadge(ReadinessControlStatus controlStatus) => controlStatus switch
+    {
+        ReadinessControlStatus.Ready => "status-badge ok",
+        ReadinessControlStatus.ReadyWithApprovedException => "status-badge ok",
+        ReadinessControlStatus.NotRequired => "status-badge",
+        ReadinessControlStatus.Blocked => "status-badge danger",
+        _ => "status-badge action"
+    };
 }
 
 <div class="panel">
     <div class="d-flex flex-wrap justify-content-between gap-3">
         <div>
-            <div class="text-muted fw-semibold">@Model.ReleaseNumber</div>
+            <div class="text-muted fw-semibold">@Model.ReleaseNumber · Application track</div>
             <h1 class="h3 mb-2">@Model.Title</h1>
             <span class="status-badge @(Model.Status.ActionRequiredFromCurrentUser ? "action" : "")">@Model.Status.CurrentStatusDisplay</span>
+            <span class="status-badge @(p.Category == ReleaseCategory.Major ? "danger" : "")">@p.Category</span>
+            <span class="status-badge @(p.ExecutionMode == ExecutionMode.Expedited ? "danger" : "")">@p.ExecutionMode</span>
+            @if (p.Outcome is not null) { <span class="status-badge ok">Outcome: @p.Outcome</span> }
         </div>
         <div class="text-md-end">
-            <div><strong>@Model.Priority priority</strong></div>
-            <div class="text-muted">Planned @Model.PlannedReleaseDate.ToLocalTime().ToString("g")</div>
-            <div class="text-muted">Responsible: @(Model.Status.CurrentResponsibleDisplay ?? "Unassigned")</div>
-            <div class="mt-2">
+            <div class="text-muted">Window @p.PlannedWindowStart.ToLocalTime().ToString("g") – @p.PlannedWindowEnd.ToLocalTime().ToString("g")</div>
+            <div class="text-muted">Release Manager: @(Model.ReleaseManagerName ?? "—") · Technical Owner: @(Model.TechnicalOwnerName ?? "—")</div>
+            <div class="text-muted">Responsible now: @(Model.Status.CurrentResponsibleDisplay ?? "Unassigned")</div>
+            <div class="mt-2 d-flex gap-2 justify-content-md-end">
+                <a class="btn btn-sm btn-outline-secondary" asp-action="Compliance" asp-route-id="@Model.Id">CBAR 7.28 pack</a>
                 <a class="btn btn-sm btn-outline-secondary" asp-action="Print" asp-route-id="@Model.Id" target="_blank" rel="noopener">Print</a>
+                @if (status is ReleaseStatus.Draft or ReleaseStatus.ReturnedForRevision)
+                {
+                    <a class="btn btn-sm btn-accent" asp-action="Edit" asp-route-id="@Model.Id">Edit record</a>
+                }
             </div>
         </div>
     </div>
@@ -36,12 +60,47 @@
     </div>
 }
 
+@if (Model.ActiveFreezes.Any(f => !f.HasException))
+{
+    <div class="alert alert-warning">
+        <strong>Release freeze (§6.3).</strong> The planned window overlaps:
+        @foreach (var freeze in Model.ActiveFreezes.Where(f => !f.HasException))
+        {
+            <div>@freeze.Name (@freeze.FreezeType, @freeze.StartDate.ToLocalTime().ToString("g") – @freeze.EndDate.ToLocalTime().ToString("g"), authority: @freeze.Authority)</div>
+        }
+        @if (Model.IsReleaseManager)
+        {
+            <details class="mt-2">
+                <summary>Record an exception approved by the freeze authority</summary>
+                <form asp-action="AddFreezeException" method="post" class="row g-2 mt-1">
+                    <input type="hidden" name="ReleaseId" value="@Model.Id" />
+                    <div class="col-md-4">
+                        <select name="FreezePeriodId" class="form-select">
+                            @foreach (var freeze in Model.ActiveFreezes.Where(f => !f.HasException))
+                            {
+                                <option value="@freeze.FreezePeriodId">@freeze.Name</option>
+                            }
+                        </select>
+                    </div>
+                    <div class="col-md-3"><input name="ApprovedBy" class="form-control" placeholder="Approved by (authority)" required /></div>
+                    <div class="col-md-4"><input name="Justification" class="form-control" placeholder="Justification" required /></div>
+                    <div class="col-md-1"><button class="btn btn-sm btn-accent w-100" type="submit">Save</button></div>
+                </form>
+            </details>
+        }
+    </div>
+}
+
 <div class="panel">
     <dl class="status-summary mb-0">
         <div><dt>Current status</dt><dd>@Model.Status.CurrentStatusDisplay</dd></div>
         <div><dt>Responsible</dt><dd>@(Model.Status.CurrentResponsibleDisplay ?? "Unassigned")</dd></div>
         <div><dt>Status changed</dt><dd>@Model.Status.StatusChangedAtUtc.ToLocalTime().ToString("g")</dd></div>
         <div><dt>Next stage</dt><dd>@(Model.Status.NextStageDisplay ?? "—")</dd></div>
+        @if (p.StabilizationEnd is not null)
+        {
+            <div><dt>Stabilization</dt><dd>@(p.StabilizationStart?.ToLocalTime().ToString("g")) – @(p.StabilizationEnd?.ToLocalTime().ToString("g"))</dd></div>
+        }
         @if (!string.IsNullOrWhiteSpace(Model.Status.ReturnOrRejectReason))
         {
             <div><dt>Return / rejection reason</dt><dd>@Model.Status.ReturnOrRejectReason</dd></div>
@@ -50,13 +109,23 @@
     </dl>
 </div>
 
+@if (p.GateErrors.Any() && (Model.IsReleaseManager || Model.IsTechnicalOwner))
+{
+    <div class="alert alert-info">
+        <strong>Open items before the next gate (§8.1 hard block):</strong>
+        <ul class="mb-0">
+            @foreach (var error in p.GateErrors) { <li>@error</li> }
+        </ul>
+    </div>
+}
+
 @if (Model.AllowedTransitions.Any())
 {
     <section class="panel">
-        <h2 class="h5">@(isRmOrchestration ? "Release Manager: send for confirmation" : "Available actions")</h2>
-        @if (isRmOrchestration)
+        <h2 class="h5">Available actions</h2>
+        @if (status == ReleaseStatus.ReleaseManagerReview)
         {
-            <p class="text-muted">Send to <strong>one</strong> structure at a time. After they respond, the release returns here so you can choose the next step.</p>
+            <p class="text-muted">Release Manager: check the minimum record (§8.2), then accept it to start readiness. Evidence owners set their own control statuses; you do not collect approvals.</p>
         }
         <div class="row g-3">
             @foreach (var target in Model.AllowedTransitions)
@@ -66,6 +135,12 @@
                         <input type="hidden" name="ReleaseId" value="@Model.Id" />
                         <input type="hidden" name="TargetStatus" value="@target" />
                         <label class="form-label fw-semibold">@ReleaseStatusDisplay.FormatAction(target)</label>
+                        @if (target == ReleaseStatus.Stabilization)
+                        {
+                            <label class="form-label small">Stabilization end (default by category: Minor 4h, Normal 24h, Major 72h)</label>
+                            <input type="datetime-local" name="StabilizationEnd" class="form-control form-control-sm mb-2" />
+                            <input name="StabilizationNotes" class="form-control form-control-sm mb-2" placeholder="Monitoring focus / notes" />
+                        }
                         <textarea name="Comment" class="form-control form-control-sm mb-2" rows="2" placeholder="Comment or reason"></textarea>
                         <button type="submit" class="btn btn-sm btn-accent">Confirm</button>
                     </form>
@@ -78,8 +153,8 @@
 @if (approvalType.HasValue)
 {
     <section class="panel">
-        <h2 class="h5">Approval decision</h2>
-        <p class="text-muted">Approve returns the release to the Release Manager for the next structure (or finish).</p>
+        <h2 class="h5">Legacy approval decision</h2>
+        <p class="text-muted">This release is still in the old in-app approval flow. Approve returns it to the Release Manager, who then starts readiness.</p>
         <form asp-controller="Approvals" asp-action="Decide" method="post">
             <input type="hidden" name="ReleaseId" value="@Model.Id" />
             <input type="hidden" name="ApprovalType" value="@approvalType.Value" />
@@ -98,7 +173,7 @@
 
 <div class="panel">
     <ul class="nav nav-tabs" id="release-tabs" role="tablist">
-        @foreach (var tab in new[] { "General", "Services", "Approvals", "Comments", "Attachments", "History", "Deployment" })
+        @foreach (var tab in tabs)
         {
             var id = tab.ToLowerInvariant();
             <li class="nav-item" role="presentation">
@@ -112,20 +187,321 @@
                 <div><dt>Product</dt><dd>@(Model.ProductName ?? "—")</dd></div>
                 <div><dt>Environment</dt><dd>@(Model.EnvironmentName ?? "—")</dd></div>
                 <div><dt>Version</dt><dd>@(string.IsNullOrWhiteSpace(Model.ReleaseVersion) ? "—" : Model.ReleaseVersion)</dd></div>
-                <div><dt>Risk level</dt><dd>@Model.RiskLevel</dd></div>
+                <div><dt>Category / mode</dt><dd>@p.Category / @p.ExecutionMode</dd></div>
+                <div><dt>Classification criteria</dt><dd>@(p.ClassificationCriteria == ClassificationCriteria.None ? "None selected" : p.ClassificationCriteria.ToString())</dd></div>
+                <div><dt>Security triggers</dt><dd>@(p.SecurityTriggers == SecurityTriggers.None ? "None" : p.SecurityTriggers.ToString())</dd></div>
+                <div><dt>Planned window</dt><dd>@p.PlannedWindowStart.ToLocalTime().ToString("g") – @p.PlannedWindowEnd.ToLocalTime().ToString("g")</dd></div>
+                <div><dt>Actual window</dt><dd>@(p.ActualWindowStart is null ? "—" : $"{p.ActualWindowStart.Value.ToLocalTime():g} – {(p.ActualWindowEnd?.ToLocalTime().ToString("g") ?? "…")}")</dd></div>
+                <div><dt>Planned maintenance</dt><dd>@(p.PlannedMaintenance ? $"Yes — {p.MaintenanceApprovalReference}" : "No")</dd></div>
                 <div><dt>Downtime</dt><dd>@(Model.DowntimeRequired ? $"{Model.ExpectedDowntimeMinutes ?? 0} minutes" : "Not required")</dd></div>
-                <div><dt>Azure DevOps</dt><dd>@if (!string.IsNullOrWhiteSpace(Model.AzureDevOpsWorkItemUrl)) { <a href="@Model.AzureDevOpsWorkItemUrl" target="_blank" rel="noopener">Work item @Model.AzureDevOpsWorkItemId</a> } else { <span>—</span> }</dd></div>
+                <div><dt>Operational impact</dt><dd>@(p.OperationalImpact ? "Yes (operational readiness required)" : "No")</dd></div>
+                <div><dt>Key dependencies</dt><dd>@(string.IsNullOrWhiteSpace(p.KeyDependencies) ? "—" : p.KeyDependencies)</dd></div>
+                <div><dt>Recovery approach</dt><dd>@p.RecoveryApproach</dd></div>
+                <div><dt>Forecast entry</dt><dd>@(Model.ForecastTitle ?? "Not in forecast")</dd></div>
+                <div><dt>Outcome</dt><dd>@(p.Outcome?.ToString() ?? "—") @(string.IsNullOrWhiteSpace(p.OutcomeNotes) ? "" : $"— {p.OutcomeNotes}")</dd></div>
+                <div><dt>Azure DevOps mirror item</dt><dd>@if (!string.IsNullOrWhiteSpace(Model.AzureDevOpsWorkItemUrl)) { <a href="@Model.AzureDevOpsWorkItemUrl" target="_blank" rel="noopener">Work item @Model.AzureDevOpsWorkItemId</a> } else { <span>— (link-first: see Links tab)</span> }</dd></div>
             </dl>
+            @if (p.ExecutionMode == ExecutionMode.Expedited)
+            {
+                <div class="alert alert-warning">
+                    <strong>Expedited (§6.2):</strong> @p.ExpeditedJustification
+                    <div class="small">Director authorization: @(p.DirectorApprovalReference ?? "—"). A Post-Release Review is mandatory.</div>
+                </div>
+            }
             @foreach (var item in new[] {
-                ("Description", Model.Description), ("Testing summary", Model.TestingSummary),
-                ("Risk description", Model.RiskDescription), ("Deployment plan", Model.DeploymentPlan),
-                ("Rollback plan", Model.RollbackPlan), ("Monitoring plan", Model.MonitoringPlan),
-                ("Post-release validation", Model.PostReleaseValidationPlan) })
+                ("Description", Model.Description), ("Customer / business impact", p.ImpactDescription), ("Testing summary", Model.TestingSummary),
+                ("Deployment plan", Model.DeploymentPlan), ("Rollback / backout / roll-forward", Model.RollbackPlan),
+                ("Recovery decision points", p.RecoveryDecisionPoints), ("Recovery responsible parties", p.RecoveryResponsibleParties),
+                ("Monitoring plan", Model.MonitoringPlan), ("Post-release validation plan", Model.PostReleaseValidationPlan) })
             {
                 <h3 class="h6 mt-3">@item.Item1</h3>
                 <p class="text-muted" style="white-space: pre-wrap">@(string.IsNullOrWhiteSpace(item.Item2) ? "—" : item.Item2)</p>
             }
+
+            @if (Model.IsReleaseManager && status is not (ReleaseStatus.Closed or ReleaseStatus.Cancelled or ReleaseStatus.Rejected or ReleaseStatus.RolledBack))
+            {
+                <hr />
+                <div class="row g-4">
+                    <div class="col-lg-6">
+                        <h3 class="h6">Owners (§2)</h3>
+                        <form asp-action="AssignOwners" method="post" class="row g-2">
+                            <input type="hidden" name="releaseId" value="@Model.Id" />
+                            <div class="col-md-5">
+                                <label class="form-label small">Technical Owner</label>
+                                <select name="technicalOwnerUserId" class="form-select form-select-sm" asp-items="@(new SelectList(Model.Users, "Id", "Name", p.TechnicalOwnerUserId))"><option value="">—</option></select>
+                            </div>
+                            <div class="col-md-5">
+                                <label class="form-label small">Release Manager</label>
+                                <select name="releaseManagerUserId" class="form-select form-select-sm" asp-items="@(new SelectList(Model.Users, "Id", "Name", p.ReleaseManagerUserId))"><option value="">—</option></select>
+                            </div>
+                            <div class="col-md-2 d-flex align-items-end"><button class="btn btn-sm btn-outline-secondary w-100" type="submit">Save</button></div>
+                        </form>
+                    </div>
+                    @if (canReschedule)
+                    {
+                        <div class="col-lg-6">
+                            <h3 class="h6">Reschedule window (§3.2)</h3>
+                            <form asp-action="Reschedule" method="post" class="row g-2">
+                                <input type="hidden" name="releaseId" value="@Model.Id" />
+                                <div class="col-md-6"><input type="datetime-local" name="plannedWindowStart" class="form-control form-control-sm" value="@p.PlannedWindowStart.ToLocalTime().ToString("yyyy-MM-ddTHH:mm")" required /></div>
+                                <div class="col-md-6"><input type="datetime-local" name="plannedWindowEnd" class="form-control form-control-sm" value="@p.PlannedWindowEnd.ToLocalTime().ToString("yyyy-MM-ddTHH:mm")" required /></div>
+                                <div class="col-md-8"><input name="reason" class="form-control form-control-sm" placeholder="Reason (required)" required /></div>
+                                <div class="col-md-4"><input name="audience" class="form-control form-control-sm" placeholder="Audience to notify" /></div>
+                                <div class="col-md-8"><div class="form-check"><input type="checkbox" name="notifyStakeholders" value="true" class="form-check-input" id="notify-stakeholders" checked /><label class="form-check-label small" for="notify-stakeholders">Log stakeholder communication (significant impact)</label></div></div>
+                                <div class="col-md-4"><button class="btn btn-sm btn-outline-secondary w-100" type="submit">Reschedule</button></div>
+                            </form>
+                        </div>
+                    }
+                </div>
+            }
         </div>
+
+        <div class="tab-pane fade" id="readiness">
+            <p class="text-muted">Readiness controls (§5). Each evidence owner sets the status of their own control and links the evidence in the source system. The Release Manager only verifies that every applicable control is closed before marking the release ready (§8.1).</p>
+            <div class="table-responsive">
+                <table class="table align-middle">
+                    <thead><tr><th>Control</th><th>Owner</th><th>Status</th><th>Evidence / justification</th><th>Updated</th><th></th></tr></thead>
+                    <tbody>
+                    @foreach (var control in p.ReadinessControls)
+                    {
+                        <tr class="@(control.IsRequired ? "" : "text-muted")">
+                            <td>
+                                <strong>@control.Title</strong> <span class="small text-muted">@control.ProcedureSection</span>
+                                <div class="small text-muted">@control.Description</div>
+                                @if (!control.IsRequired) { <div class="small">Not applicable to this release</div> }
+                            </td>
+                            <td>@ReleaseStatusDisplay.FormatResponsible(control.OwnerRole, null)</td>
+                            <td><span class="@ControlBadge(control.Status)">@(control.IsRequired ? control.Status.ToString() : "N/A")</span></td>
+                            <td>
+                                @if (!string.IsNullOrWhiteSpace(control.EvidenceReference))
+                                {
+                                    @if (control.EvidenceReference.StartsWith("http", StringComparison.OrdinalIgnoreCase))
+                                    {
+                                        <a href="@control.EvidenceReference" target="_blank" rel="noopener">@control.EvidenceReference</a>
+                                    }
+                                    else
+                                    {
+                                        <span>@control.EvidenceReference</span>
+                                    }
+                                }
+                                @if (!string.IsNullOrWhiteSpace(control.Justification)) { <div class="small text-muted">@control.Justification</div> }
+                            </td>
+                            <td class="small">@(control.UpdatedDate?.ToLocalTime().ToString("g") ?? "—")<div class="text-muted">@control.UpdatedByDisplay</div></td>
+                            <td>
+                                @if (control.IsRequired && control.CanCurrentUserSet && isReadiness)
+                                {
+                                    <details>
+                                        <summary class="btn btn-sm btn-outline-secondary">Set</summary>
+                                        <form asp-action="SetReadiness" method="post" class="mt-2" style="min-width: 260px">
+                                            <input type="hidden" name="ReleaseId" value="@Model.Id" />
+                                            <input type="hidden" name="ControlType" value="@control.ControlType" />
+                                            <select name="Status" class="form-select form-select-sm mb-1">
+                                                <option value="@ReadinessControlStatus.Ready">Ready</option>
+                                                @if (control.ControlType == ReadinessControlType.SecurityReadiness)
+                                                {
+                                                    <option value="@ReadinessControlStatus.ReadyWithApprovedException">Ready with Approved Exception</option>
+                                                }
+                                                <option value="@ReadinessControlStatus.NotRequired">Not Required (justify)</option>
+                                                <option value="@ReadinessControlStatus.Blocked">Blocked (justify)</option>
+                                            </select>
+                                            <input name="EvidenceReference" class="form-control form-control-sm mb-1" placeholder="Evidence link / ID in source system" />
+                                            <input name="Justification" class="form-control form-control-sm mb-1" placeholder="Justification (N/A, exception, blocked)" />
+                                            <button class="btn btn-sm btn-accent" type="submit">Save</button>
+                                        </form>
+                                    </details>
+                                }
+                            </td>
+                        </tr>
+                    }
+                    </tbody>
+                </table>
+            </div>
+        </div>
+
+        <div class="tab-pane fade" id="links">
+            <p class="text-muted">Link-first evidence (§1.3, §8.1): work items, PRs, pipelines, artifacts, Service Desk Change / Incident, test and security evidence. Nothing is copied into the record.</p>
+            <table class="table align-middle">
+                <thead><tr><th>Type</th><th>ID</th><th>Title</th><th>Link</th><th>Added</th><th></th></tr></thead>
+                <tbody>
+                @foreach (var reference in p.References)
+                {
+                    <tr>
+                        <td>@reference.ReferenceType</td>
+                        <td>@reference.ExternalId</td>
+                        <td>@(reference.Title ?? "—")</td>
+                        <td>@if (!string.IsNullOrWhiteSpace(reference.Url)) { <a href="@reference.Url" target="_blank" rel="noopener">Open</a> } else { <span>—</span> }</td>
+                        <td class="small">@reference.AddedDate.ToLocalTime().ToString("g")</td>
+                        <td class="text-end">
+                            @if (Model.CanEditRecord && status is not (ReleaseStatus.Closed or ReleaseStatus.Cancelled or ReleaseStatus.Rejected or ReleaseStatus.RolledBack))
+                            {
+                                <form asp-action="RemoveReference" method="post" class="d-inline">
+                                    <input type="hidden" name="releaseId" value="@Model.Id" />
+                                    <input type="hidden" name="referenceId" value="@reference.Id" />
+                                    <button class="btn btn-sm btn-outline-danger" type="submit">Remove</button>
+                                </form>
+                            }
+                        </td>
+                    </tr>
+                }
+                @if (!p.References.Any()) { <tr><td colspan="6" class="text-muted">No references linked yet.</td></tr> }
+                </tbody>
+            </table>
+            @if (Model.CanEditRecord && status is not (ReleaseStatus.Closed or ReleaseStatus.Cancelled or ReleaseStatus.Rejected))
+            {
+                <form asp-action="AddReference" method="post" class="row g-2 align-items-end">
+                    <input type="hidden" name="ReleaseId" value="@Model.Id" />
+                    <div class="col-md-3"><label class="form-label small">Type</label><select name="ReferenceType" class="form-select form-select-sm" asp-items="@(new SelectList(referenceTypes))"></select></div>
+                    <div class="col-md-2"><label class="form-label small">ID</label><input name="ExternalId" class="form-control form-control-sm" required /></div>
+                    <div class="col-md-4"><label class="form-label small">URL</label><input name="Url" class="form-control form-control-sm" /></div>
+                    <div class="col-md-2"><label class="form-label small">Title</label><input name="Title" class="form-control form-control-sm" /></div>
+                    <div class="col-md-1"><button class="btn btn-sm btn-accent w-100" type="submit">Add</button></div>
+                </form>
+                <div class="form-text">Release-related incident? Link it with type <strong>Incident</strong> — it feeds the Incident Rate KPI and triggers a Post-Release Review (§7.3, §9).</div>
+            }
+        </div>
+
+        <div class="tab-pane fade" id="communication">
+            <p class="text-muted">Impact-based stakeholder communication (§6.4). @(p.RequiresPreReleaseCommunication ? "This release requires a pre-release notification before it can be marked ready." : "No mandatory pre-release notification for this impact level; log communication when useful.")</p>
+            <table class="table">
+                <thead><tr><th>When</th><th>Type</th><th>Audience</th><th>Channel</th><th>Message</th><th>By</th></tr></thead>
+                <tbody>
+                @foreach (var item in p.Communications)
+                {
+                    <tr><td class="small">@item.SentDate.ToLocalTime().ToString("g")</td><td>@item.CommunicationType</td><td>@item.Audience</td><td>@item.Channel</td><td style="white-space: pre-wrap">@item.Message</td><td>@item.SentByDisplay</td></tr>
+                }
+                @if (!p.Communications.Any()) { <tr><td colspan="6" class="text-muted">No communication logged.</td></tr> }
+                </tbody>
+            </table>
+            @if (Model.CanEditRecord)
+            {
+                <form asp-action="LogCommunication" method="post" class="row g-2 align-items-end">
+                    <input type="hidden" name="ReleaseId" value="@Model.Id" />
+                    <div class="col-md-2"><label class="form-label small">Type</label><select name="CommunicationType" class="form-select form-select-sm" asp-items="Html.GetEnumSelectList<CommunicationType>()"></select></div>
+                    <div class="col-md-3"><label class="form-label small">Audience</label><input name="Audience" class="form-control form-control-sm" placeholder="Support, Business unit, Customers…" required /></div>
+                    <div class="col-md-2"><label class="form-label small">Channel</label><input name="Channel" class="form-control form-control-sm" placeholder="Email / Teams / Status page" required /></div>
+                    <div class="col-md-4"><label class="form-label small">Message</label><input name="Message" class="form-control form-control-sm" required /></div>
+                    <div class="col-md-1"><button class="btn btn-sm btn-accent w-100" type="submit">Log</button></div>
+                </form>
+            }
+        </div>
+
+        <div class="tab-pane fade" id="validation">
+            <div class="row g-4">
+                <div class="col-lg-6">
+                    <h3 class="h6">Technical / service validation (§7.2)</h3>
+                    @if (p.Validation.Exists && p.Validation.TechnicalResult != ValidationResult.Pending)
+                    {
+                        <dl class="status-summary">
+                            <div><dt>Result</dt><dd>@p.Validation.TechnicalResult</dd></div>
+                            <div><dt>Health / smoke / monitoring</dt><dd>@(p.Validation.HealthCheckPassed ? "✓" : "✗") / @(p.Validation.SmokeTestPassed ? "✓" : "✗") / @(p.Validation.MonitoringClean ? "✓" : "✗")</dd></div>
+                            <div><dt>Recovery needed</dt><dd>@(p.Validation.RecoveryNeeded ? "Yes" : "No")</dd></div>
+                            <div><dt>Evidence</dt><dd>@(p.Validation.TechnicalEvidenceReference ?? "—")</dd></div>
+                            <div><dt>Validated</dt><dd>@(p.Validation.TechnicalValidatedDate?.ToLocalTime().ToString("g")) by @p.Validation.TechnicalValidatedByDisplay</dd></div>
+                        </dl>
+                        <p class="text-muted" style="white-space: pre-wrap">@p.Validation.TechnicalNotes</p>
+                    }
+                    else
+                    {
+                        <p class="text-muted">Not recorded yet.</p>
+                    }
+                    @if (isPostDeploy && Model.IsTechnicalOwner)
+                    {
+                        <form asp-action="TechnicalValidation" method="post" class="border rounded p-3">
+                            <input type="hidden" name="ReleaseId" value="@Model.Id" />
+                            <select name="Result" class="form-select form-select-sm mb-2">
+                                <option value="@ValidationResult.Passed">Passed</option>
+                                <option value="@ValidationResult.PassedWithIssues">Passed with issues</option>
+                                <option value="@ValidationResult.Failed">Failed</option>
+                            </select>
+                            <div class="form-check"><input type="checkbox" name="HealthCheckPassed" value="true" class="form-check-input" id="v-health" /><label class="form-check-label" for="v-health">Health checks passed</label></div>
+                            <div class="form-check"><input type="checkbox" name="SmokeTestPassed" value="true" class="form-check-input" id="v-smoke" /><label class="form-check-label" for="v-smoke">Smoke / technical validation passed</label></div>
+                            <div class="form-check"><input type="checkbox" name="MonitoringClean" value="true" class="form-check-input" id="v-mon" /><label class="form-check-label" for="v-mon">Monitoring / error rate clean</label></div>
+                            <div class="form-check mb-2"><input type="checkbox" name="RecoveryNeeded" value="true" class="form-check-input" id="v-rec" /><label class="form-check-label" for="v-rec">Recovery needed</label></div>
+                            <input name="EvidenceReference" class="form-control form-control-sm mb-2" placeholder="Monitoring dashboard / pipeline run link" />
+                            <textarea name="Notes" class="form-control form-control-sm mb-2" rows="2" placeholder="Notes"></textarea>
+                            <button class="btn btn-sm btn-accent" type="submit">Record technical validation</button>
+                        </form>
+                    }
+                </div>
+                <div class="col-lg-6">
+                    <h3 class="h6">Product / business validation (§7.2)</h3>
+                    @if (!p.RequiresBusinessValidation && !p.Validation.BusinessValidationRequired)
+                    {
+                        <p class="text-muted">Not required — no business-visible change was declared.</p>
+                    }
+                    else if (p.Validation.Exists && p.Validation.BusinessValidatedDate is not null)
+                    {
+                        <dl class="status-summary">
+                            <div><dt>Result</dt><dd>@p.Validation.BusinessResult</dd></div>
+                            <div><dt>Validated</dt><dd>@(p.Validation.BusinessValidatedDate?.ToLocalTime().ToString("g")) by @p.Validation.BusinessValidatedByDisplay</dd></div>
+                        </dl>
+                        <p class="text-muted" style="white-space: pre-wrap">@p.Validation.BusinessNotes</p>
+                    }
+                    else
+                    {
+                        <p class="text-muted">Waiting for the Product Owner.</p>
+                    }
+                    @if (isPostDeploy && Model.IsProductOwner)
+                    {
+                        <form asp-action="BusinessValidation" method="post" class="border rounded p-3">
+                            <input type="hidden" name="ReleaseId" value="@Model.Id" />
+                            <select name="Result" class="form-select form-select-sm mb-2">
+                                <option value="@ValidationResult.Passed">Passed</option>
+                                <option value="@ValidationResult.PassedWithIssues">Passed with issues</option>
+                                <option value="@ValidationResult.Failed">Failed</option>
+                            </select>
+                            <textarea name="Notes" class="form-control form-control-sm mb-2" rows="2" placeholder="Notes"></textarea>
+                            <button class="btn btn-sm btn-accent" type="submit">Record business validation</button>
+                        </form>
+                    }
+                </div>
+                <div class="col-lg-6">
+                    <h3 class="h6">Outcome (§8.2)</h3>
+                    @if (Model.IsReleaseManager && status is ReleaseStatus.Deployed or ReleaseStatus.Stabilization or ReleaseStatus.DeploymentFailed)
+                    {
+                        <form asp-action="RecordOutcome" method="post" class="row g-2">
+                            <input type="hidden" name="ReleaseId" value="@Model.Id" />
+                            <div class="col-md-4">
+                                <select name="Outcome" class="form-select form-select-sm">
+                                    <option value="@ReleaseOutcome.Successful">Successful</option>
+                                    <option value="@ReleaseOutcome.Remediated">Remediated</option>
+                                    <option value="@ReleaseOutcome.Failed">Failed</option>
+                                </select>
+                            </div>
+                            <div class="col-md-6"><input name="Notes" class="form-control form-control-sm" placeholder="Notes" /></div>
+                            <div class="col-md-2"><button class="btn btn-sm btn-outline-secondary w-100" type="submit">Save</button></div>
+                        </form>
+                    }
+                    else
+                    {
+                        <p class="text-muted">@(p.Outcome?.ToString() ?? "Not recorded.")</p>
+                    }
+                </div>
+                <div class="col-lg-6">
+                    <h3 class="h6">Post-Release Review (§7.3)</h3>
+                    @if (p.Review is not null)
+                    {
+                        <p>
+                            <span class="status-badge @(p.Review.Status == PirStatus.Completed ? "ok" : "action")">@p.Review.Status</span>
+                            <span class="small text-muted">Triggers: @p.Review.Triggers</span>
+                        </p>
+                        <a class="btn btn-sm btn-outline-secondary" asp-controller="Reviews" asp-action="Details" asp-route-id="@p.Review.Id">Open review</a>
+                    }
+                    else
+                    {
+                        <p class="text-muted">Not required so far (Expedited, failed deployment / validation, rollback, incident or significant impact would trigger it).</p>
+                        @if (Model.IsReleaseManager && status is not (ReleaseStatus.Draft or ReleaseStatus.Submitted))
+                        {
+                            <form asp-action="OpenReview" method="post">
+                                <input type="hidden" name="releaseId" value="@Model.Id" />
+                                <button class="btn btn-sm btn-outline-secondary" type="submit">Open a review manually</button>
+                            </form>
+                        }
+                    }
+                </div>
+            </div>
+        </div>
+
         <div class="tab-pane fade" id="services">
             <div class="table-responsive">
                 <table class="table align-middle">
@@ -166,29 +542,31 @@
                     </tbody>
                 </table>
             </div>
+            @if (Model.Approvals.Any())
+            {
+                <h3 class="h6 mt-3">Legacy approvals</h3>
+                <table class="table">
+                    <thead><tr><th>Type</th><th>Status</th><th>Requested</th><th>Decision</th><th>Comment</th></tr></thead>
+                    <tbody>
+                    @foreach (var item in Model.Approvals)
+                    {
+                        <tr><td>@item.ApprovalType</td><td>@item.Status</td><td>@item.RequestedDate.ToLocalTime().ToString("g")</td><td>@(item.DecisionDate?.ToLocalTime().ToString("g") ?? "—")</td><td>@(item.Comment ?? "—")</td></tr>
+                    }
+                    </tbody>
+                </table>
+            }
         </div>
-        <div class="tab-pane fade" id="approvals">
-            <table class="table">
-                <thead><tr><th>Type</th><th>Status</th><th>Requested</th><th>Decision</th><th>Comment</th></tr></thead>
-                <tbody>
-                @foreach (var item in Model.Approvals)
-                {
-                    <tr><td>@item.ApprovalType</td><td>@item.Status</td><td>@item.RequestedDate.ToLocalTime().ToString("g")</td><td>@(item.DecisionDate?.ToLocalTime().ToString("g") ?? "—")</td><td>@(item.Comment ?? "—")</td></tr>
-                }
-                @if (!Model.Approvals.Any()) { <tr><td colspan="5" class="text-muted">No approvals requested.</td></tr> }
-                </tbody>
-            </table>
-        </div>
+
         <div class="tab-pane fade" id="comments">
             <form asp-action="AddComment" method="post" class="mb-4">
                 <input type="hidden" name="ReleaseId" value="@Model.Id" />
-                <label for="new-comment" class="form-label">Start dialogue</label>
+                <label for="new-comment" class="form-label">Internal dialogue</label>
                 <textarea id="new-comment" name="Comment" class="form-control mb-2" rows="3" required placeholder="Write a message to the team…"></textarea>
                 <button type="submit" class="btn btn-accent">Post comment</button>
             </form>
             @if (!rootComments.Any())
             {
-                <p class="text-muted">No comments yet. Start the dialogue above.</p>
+                <p class="text-muted">No comments yet.</p>
             }
             @foreach (var item in rootComments)
             {
@@ -219,7 +597,9 @@
                 </div>
             }
         </div>
+
         <div class="tab-pane fade" id="attachments">
+            <p class="text-muted small">Attachments are a convenience only — authoritative evidence must stay in the source systems and be linked on the Links tab (§1.3).</p>
             <form asp-action="UploadAttachment" method="post" enctype="multipart/form-data" class="row g-2 align-items-end mb-4">
                 <input type="hidden" name="releaseId" value="@Model.Id" />
                 <div class="col-md-8"><label for="attachment" class="form-label">Upload attachment</label><input id="attachment" type="file" name="file" class="form-control" required /></div>
@@ -233,6 +613,7 @@
             @if (!Model.Attachments.Any()) { <tr><td class="text-muted">No attachments uploaded.</td></tr> }
             </tbody></table>
         </div>
+
         <div class="tab-pane fade" id="history">
             <ul class="timeline">
                 @foreach (var item in Model.History)
@@ -241,16 +622,18 @@
                 }
             </ul>
         </div>
+
         <div class="tab-pane fade" id="deployment">
-            @if (Model.Status.CurrentStatus == ReleaseStatus.ReadyForRelease)
+            @if (status == ReleaseStatus.ReadyForRelease)
             {
                 <form asp-controller="Deployments" asp-action="Start" method="post">
                     <input type="hidden" name="id" value="@Model.Id" />
                     <h3 class="h6">Start deployment</h3>
-                    <div class="row g-2"><div class="col-md-5"><input name="pipelineUrl" class="form-control" placeholder="Pipeline URL" /></div><div class="col-md-4"><input name="buildNumber" class="form-control" placeholder="Build number" /></div><div class="col-md-3"><button class="btn btn-accent" type="submit">Start</button></div></div>
+                    <p class="text-muted small">Deployment is executed from the approved artifact / pipeline. Record the pipeline run so the evidence is traceable (§7.1).</p>
+                    <div class="row g-2"><div class="col-md-5"><input name="pipelineUrl" class="form-control" placeholder="Pipeline run URL" /></div><div class="col-md-4"><input name="buildNumber" class="form-control" placeholder="Build number" /></div><div class="col-md-3"><button class="btn btn-accent" type="submit">Start</button></div></div>
                 </form>
             }
-            else if (Model.Status.CurrentStatus == ReleaseStatus.DeploymentInProgress)
+            else if (status == ReleaseStatus.DeploymentInProgress)
             {
                 <div class="row g-4">
                     <div class="col-lg-6">
@@ -258,7 +641,7 @@
                             <input type="hidden" name="id" value="@Model.Id" />
                             <h3 class="h6">Complete deployment</h3>
                             <textarea name="comment" class="form-control mb-2" rows="3" placeholder="Completion notes"></textarea>
-                            <button class="btn btn-success" type="submit">Mark successful</button>
+                            <button class="btn btn-success" type="submit">Mark deployed (validation follows)</button>
                         </form>
                     </div>
                     <div class="col-lg-6">

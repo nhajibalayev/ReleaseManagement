@@ -1,0 +1,62 @@
+@using ReleaseManagement.Application.Abstractions
+@inject ICurrentUserService CurrentUser
+@model FreezePageViewModel
+@{
+    ViewData["Title"] = "Freeze Periods";
+    var canManage = CurrentUser.IsInRole("ReleaseManager") || CurrentUser.IsInRole("Administrator");
+}
+
+<div class="mb-3">
+    <h1 class="h3 mb-1">Release Freeze Periods</h1>
+    <p class="text-muted mb-0">§6.3: the platform does not create freeze policy — it applies Business/Enterprise freezes (Board / delegated authority) and IT Technical freezes (IT Director / BCP-DR plan) on the calendar. Scheduling into a freeze is blocked unless an exception from the freeze authority is recorded on the release.</p>
+</div>
+
+<div class="row g-4">
+    <div class="col-lg-8">
+        <section class="panel">
+            <table class="table align-middle mb-0">
+                <thead><tr><th>Name</th><th>Type</th><th>Period</th><th>Authority</th><th>Exceptions</th><th>Active</th><th></th></tr></thead>
+                <tbody>
+                @foreach (var item in Model.Items)
+                {
+                    <tr class="@(item.IsActive ? "" : "text-muted")">
+                        <td>@item.Name<div class="small text-muted">@item.Description</div></td>
+                        <td>@item.FreezeType</td>
+                        <td class="small">@item.StartDate.ToLocalTime().ToString("g") – @item.EndDate.ToLocalTime().ToString("g")</td>
+                        <td>@item.Authority</td>
+                        <td>@item.ExceptionCount</td>
+                        <td>@(item.IsActive ? "Yes" : "No")</td>
+                        <td class="text-end">
+                            @if (canManage && item.IsActive)
+                            {
+                                <form asp-action="Deactivate" method="post" class="d-inline">@Html.AntiForgeryToken()<input type="hidden" name="id" value="@item.Id" /><button class="btn btn-sm btn-outline-danger" type="submit">Deactivate</button></form>
+                            }
+                        </td>
+                    </tr>
+                }
+                @if (!Model.Items.Any()) { <tr><td colspan="7" class="text-center text-muted py-4">No freeze periods.</td></tr> }
+                </tbody>
+            </table>
+        </section>
+    </div>
+    @if (canManage)
+    {
+        <div class="col-lg-4">
+            <section class="panel">
+                <h2 class="h5">Add freeze period</h2>
+                <form asp-action="Create" method="post">
+                    @Html.AntiForgeryToken()
+                    <div class="row g-2">
+                        <div class="col-12"><label class="form-label">Name</label><input name="Name" class="form-control" value="@Model.Form.Name" required /></div>
+                        <div class="col-12"><label class="form-label">Type</label><select name="FreezeType" class="form-select" asp-items="@(new SelectList(Enum.GetValues<FreezeType>(), Model.Form.FreezeType))"></select></div>
+                        <div class="col-6"><label class="form-label">Start</label><input name="StartDate" type="datetime-local" class="form-control" value="@Model.Form.StartDate.ToString("yyyy-MM-ddTHH:mm")" required /></div>
+                        <div class="col-6"><label class="form-label">End</label><input name="EndDate" type="datetime-local" class="form-control" value="@Model.Form.EndDate.ToString("yyyy-MM-ddTHH:mm")" required /></div>
+                        <div class="col-12"><label class="form-label">Authority</label><input name="Authority" class="form-control" placeholder="Board / IT Director / BCP-DR plan" value="@Model.Form.Authority" required /></div>
+                        <div class="col-12"><label class="form-label">Description</label><textarea name="Description" class="form-control" rows="2">@Model.Form.Description</textarea></div>
+                        <div class="col-12"><button class="btn btn-accent w-100" type="submit">Create</button></div>
+                    </div>
+                </form>
+            </section>
+        </div>
+    }
+</div>

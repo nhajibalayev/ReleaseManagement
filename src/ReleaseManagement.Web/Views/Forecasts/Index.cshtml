@@ -1,0 +1,70 @@
+@model ForecastPageViewModel
+@{
+    ViewData["Title"] = "Release Forecast";
+    var quarters = new[] { 1, 2, 3, 4 };
+}
+
+<div class="d-flex justify-content-between align-items-center mb-3">
+    <div>
+        <h1 class="h3 mb-1">Quarterly Release Forecast — Q@(Model.Quarter) @Model.Year</h1>
+        <p class="text-muted mb-0">§3.1: teams submit the next quarter's forecast here. The forecast is not an approval. Major releases must be pre-listed; Normal when known; Minor needs no quarterly pre-registration; Expedited may be absent.</p>
+    </div>
+    <form method="get" class="d-flex gap-2">
+        <input type="number" name="year" value="@Model.Year" class="form-control" style="width: 110px" />
+        <select name="quarter" class="form-select" style="width: 90px">
+            @foreach (var q in quarters) { <option value="@q" selected="@(q == Model.Quarter)">Q@(q)</option> }
+        </select>
+        <button class="btn btn-outline-secondary" type="submit">Show</button>
+    </form>
+</div>
+
+<div class="row g-4">
+    <div class="col-lg-8">
+        <section class="panel">
+            <div class="table-responsive">
+                <table class="table table-hover align-middle mb-0">
+                    <thead><tr><th>Product</th><th>Title</th><th>Category</th><th>Team</th><th>Expected</th><th>Dependencies</th><th>Status</th><th>Release</th><th></th></tr></thead>
+                    <tbody>
+                    @foreach (var item in Model.Items)
+                    {
+                        <tr>
+                            <td>@(item.ProductName ?? "—")</td>
+                            <td>@item.Title<div class="small text-muted">@item.Notes</div></td>
+                            <td><span class="status-badge @(item.Category == ReleaseCategory.Major ? "danger" : "")">@item.Category</span></td>
+                            <td>@item.Team</td>
+                            <td>@(item.ExpectedDate?.ToLocalTime().ToString("d") ?? "—")</td>
+                            <td class="small">@(item.Dependencies ?? "—")</td>
+                            <td>@item.Status</td>
+                            <td>@if (item.ReleaseId.HasValue) { <a asp-controller="Releases" asp-action="Details" asp-route-id="@item.ReleaseId">@item.ReleaseNumber</a> } else { <span class="text-muted">—</span> }</td>
+                            <td class="text-end"><a asp-action="Edit" asp-route-id="@item.Id" class="btn btn-sm btn-outline-secondary">Edit</a></td>
+                        </tr>
+                    }
+                    @if (!Model.Items.Any()) { <tr><td colspan="9" class="text-center text-muted py-4">No forecast entries for this quarter.</td></tr> }
+                    </tbody>
+                </table>
+            </div>
+        </section>
+    </div>
+    <div class="col-lg-4">
+        <section class="panel">
+            <h2 class="h5">@(Model.Form.Id.HasValue ? "Edit entry" : "Add forecast entry")</h2>
+            <form asp-action="Save" method="post">
+                @Html.AntiForgeryToken()
+                <input type="hidden" name="Id" value="@Model.Form.Id" />
+                <div class="row g-2">
+                    <div class="col-6"><label class="form-label">Year</label><input name="Year" type="number" class="form-control" value="@Model.Form.Year" /></div>
+                    <div class="col-6"><label class="form-label">Quarter</label><select name="Quarter" class="form-select">@foreach (var q in quarters) { <option value="@q" selected="@(q == Model.Form.Quarter)">Q@(q)</option> }</select></div>
+                    <div class="col-12"><label class="form-label">Product</label><select name="ProductId" class="form-select" asp-items="@(new SelectList(Model.Products, "Id", "Name", Model.Form.ProductId))"><option value="">Select</option></select></div>
+                    <div class="col-12"><label class="form-label">Title</label><input name="Title" class="form-control" value="@Model.Form.Title" required /></div>
+                    <div class="col-6"><label class="form-label">Category</label><select name="Category" class="form-select" asp-items="@(new SelectList(Enum.GetValues<ReleaseCategory>(), Model.Form.Category))"></select></div>
+                    <div class="col-6"><label class="form-label">Status</label><select name="Status" class="form-select" asp-items="@(new SelectList(Enum.GetValues<ForecastStatus>(), Model.Form.Status))"></select></div>
+                    <div class="col-12"><label class="form-label">Team</label><input name="Team" class="form-control" value="@Model.Form.Team" required /></div>
+                    <div class="col-12"><label class="form-label">Expected date</label><input name="ExpectedDate" type="date" class="form-control" value="@(Model.Form.ExpectedDate?.ToString("yyyy-MM-dd"))" /></div>
+                    <div class="col-12"><label class="form-label">Dependencies / resources</label><input name="Dependencies" class="form-control" value="@Model.Form.Dependencies" /></div>
+                    <div class="col-12"><label class="form-label">Notes</label><textarea name="Notes" class="form-control" rows="2">@Model.Form.Notes</textarea></div>
+                    <div class="col-12"><button class="btn btn-accent w-100" type="submit">Save</button></div>
+                </div>
+            </form>
+        </section>
+    </div>
+</div>

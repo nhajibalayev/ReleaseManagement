@@ -1,13 +1,21 @@
 using Microsoft.AspNetCore.Authorization;
+using Microsoft.AspNetCore.Identity;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 using ReleaseManagement.Application.Abstractions;
 using ReleaseManagement.Application.Authorization;
 using ReleaseManagement.Application.Common;
+using ReleaseManagement.Application.DTOs.Procedure;
 using ReleaseManagement.Application.DTOs.Releases;
+using ReleaseManagement.Application.Governance;
+using ReleaseManagement.Application.Planning;
+using ReleaseManagement.Application.PostRelease;
+using ReleaseManagement.Application.Readiness;
 using ReleaseManagement.Application.Releases;
+using ReleaseManagement.Domain.Constants;
 using ReleaseManagement.Domain.Entities;
 using ReleaseManagement.Domain.Enums;
+using ReleaseManagement.Infrastructure.Identity;
 using ReleaseManagement.Web.ViewModels;
 
 namespace ReleaseManagement.Web.Controllers;
@@ -15,8 +23,14 @@ namespace ReleaseManagement.Web.Controllers;
 [Authorize]
 public sealed class ReleasesController : Controller
 {
+    private const int WizardSteps = 6;
+
     private readonly IReleaseAppService _releaseAppService;
     private readonly IReleaseWorkflowService _workflowService;
+    private readonly IReadinessService _readiness;
+    private readonly IPostReleaseService _postRelease;
+    private readonly IPlanningService _planning;
+    private readonly IGovernanceService _governance;
     private readonly IApplicationDbContext _dbContext;
     private readonly IReleaseAuthorizationService _authorization;
     private readonly ICurrentUserService _currentUser;
@@ -24,11 +38,16 @@ public sealed class ReleasesController : Controller
     private readonly IFileStorageService _fileStorage;
     private readonly IAuditService _audit;
     private readonly IAzureDevOpsReleaseSyncService _azureDevOpsSync;
+    private readonly UserManager<AppIdentityUser> _userManager;
     private readonly ILogger<ReleasesController> _logger;
 
     public ReleasesController(
         IReleaseAppService releaseAppService,
         IReleaseWorkflowService workflowService,
+        IReadinessService readiness,
+        IPostReleaseService postRelease,
+        IPlanningService planning,
+        IGovernanceService governance,
         IApplicationDbContext dbContext,
         IReleaseAuthorizationService authorization,
         ICurrentUserService currentUser,
@@ -36,10 +55,15 @@ public sealed class ReleasesController : Controller
         IFileStorageService fileStorage,
         IAuditService audit,
         IAzureDevOpsReleaseSyncService azureDevOpsSync,
+        UserManager<AppIdentityUser> userManager,
         ILogger<ReleasesController> logger)
     {
         _releaseAppService = releaseAppService;
         _workflowService = workflowService;
+        _readiness = readiness;
+        _postRelease = postRelease;
+        _planning = planning;
+        _governance = governance;
         _dbContext = dbContext;
         _authorization = authorization;
         _currentUser = currentUser;
@@ -47,6 +71,7 @@ public sealed class ReleasesController : Controller
         _fileStorage = fileStorage;
         _audit = audit;
         _azureDevOpsSync = azureDevOpsSync;
+        _userManager = userManager;
         _logger = logger;
     }
 
@@ -83,17 +108,8 @@ public sealed class ReleasesController : Controller
     {
         model = await BuildWizardAsync(model, cancellationToken);
 
-        if (action == "next")
+        if (TryMoveStep(model, action))
         {
-            model.Step = Math.Min(5, model.Step + 1);
-            ModelState.Remove(nameof(model.Step));
-            return View(model);
-        }
-
-        if (action == "previous")
-        {
-            model.Step = Math.Max(1, model.Step - 1);
-            ModelState.Remove(nameof(model.Step));
             return View(model);
         }
 
@@ -119,7 +135,7 @@ public sealed class ReleasesController : Controller
 
             return RedirectToAction(nameof(Details), new { id });
         }
-        catch (Exception exception) when (exception is BusinessRuleException or ForbiddenException or FluentValidation.ValidationException or Microsoft.EntityFrameworkCore.DbUpdateConcurrencyException)
+        catch (Exception exception) when (exception is BusinessRuleException or ForbiddenException or FluentValidation.ValidationException or DbUpdateConcurrencyException)
         {
             ModelState.AddModelError(string.Empty, exception.Message);
             return View(model);
@@ -150,7 +166,33 @@ public sealed class ReleasesController : Controller
             PostReleaseValidationPlan = details.PostReleaseValidationPlan,
             DowntimeRequired = details.DowntimeRequired,
             ExpectedDowntimeMinutes = details.ExpectedDowntimeMinutes,
-            Services = details.Services.Select(MapServiceRow).ToList()
+            Services = details.Services.Select(MapServiceRow).ToList(),
+            PlannedWindowStart = ToLocal(details.PlannedWindowStart),
+            PlannedWindowEnd = ToLocal(details.PlannedWindowEnd),
+            PlannedMaintenance = details.PlannedMaintenance,
+            MaintenanceApprovalReference = details.MaintenanceApprovalReference,
+            OperationalImpact = details.OperationalImpact,
+            KeyDependencies = details.KeyDependencies,
+            ImpactDescription = details.ImpactDescription,
+            TechnicalOwnerUserId = details.TechnicalOwnerUserId,
+            ForecastId = details.ForecastId,
+            Criteria = ExpandFlags(details.ClassificationCriteria),
+            Triggers = ExpandFlags(details.SecurityTriggers),
+            ExecutionMode = details.ExecutionMode,
+            ExpeditedJustification = details.ExpeditedJustification,
+            DirectorApprovalReference = details.DirectorApprovalReference,
+            RecoveryApproach = details.RecoveryApproach,
+            RecoveryDecisionPoints = details.RecoveryDecisionPoints,
+            RecoveryResponsibleParties = details.RecoveryResponsibleParties,
+            References = details.References
+                .Select(item => new ReleaseReferenceRowViewModel
+                {
+                    ReferenceType = item.ReferenceType,
+                    ExternalId = item.ExternalId,
+                    Url = item.Url,
+                    Title = item.Title
+                })
+                .ToList()
         }, cancellationToken);
 
         return View(model);
@@ -170,17 +212,8 @@ public sealed class ReleasesController : Controller
 
         model = await BuildWizardAsync(model, cancellationToken);
 
-        if (action == "next")
+        if (TryMoveStep(model, action))
         {
-            model.Step = Math.Min(5, model.Step + 1);
-            ModelState.Remove(nameof(model.Step));
-            return View(model);
-        }
-
-        if (action == "previous")
-        {
-            model.Step = Math.Max(1, model.Step - 1);
-            ModelState.Remove(nameof(model.Step));
             return View(model);
         }
 
@@ -206,7 +239,7 @@ public sealed class ReleasesController : Controller
 
             return RedirectToAction(nameof(Details), new { id = model.ReleaseId });
         }
-        catch (Exception exception) when (exception is BusinessRuleException or ForbiddenException or FluentValidation.ValidationException or ConflictException or Microsoft.EntityFrameworkCore.DbUpdateConcurrencyException)
+        catch (Exception exception) when (exception is BusinessRuleException or ForbiddenException or FluentValidation.ValidationException or ConflictException or DbUpdateConcurrencyException)
         {
             ModelState.AddModelError(string.Empty, exception.Message);
             return View(model);
@@ -227,6 +260,13 @@ public sealed class ReleasesController : Controller
         return View(page);
     }
 
+    [HttpGet]
+    public async Task<IActionResult> Compliance(Guid id, CancellationToken cancellationToken)
+    {
+        var pack = await _governance.GetCompliancePackAsync(id, cancellationToken);
+        return View(pack);
+    }
+
     [HttpPost]
     [ValidateAntiForgeryToken]
     public async Task<IActionResult> Transition(TransitionFormViewModel model, CancellationToken cancellationToken)
@@ -238,13 +278,15 @@ public sealed class ReleasesController : Controller
                 {
                     ReleaseId = model.ReleaseId,
                     TargetStatus = model.TargetStatus,
-                    Comment = model.Comment
+                    Comment = model.Comment,
+                    StabilizationEndUtc = model.StabilizationEnd.HasValue ? ToUtc(model.StabilizationEnd.Value) : null,
+                    StabilizationNotes = model.StabilizationNotes
                 },
                 cancellationToken);
 
             TempData["Success"] = "Status updated.";
         }
-        catch (Exception exception) when (exception is BusinessRuleException or ForbiddenException or ConflictException or Domain.Exceptions.InvalidReleaseTransitionException or FluentValidation.ValidationException)
+        catch (Exception exception) when (IsHandled(exception))
         {
             TempData["Error"] = exception.Message;
         }
@@ -261,13 +303,100 @@ public sealed class ReleasesController : Controller
             await _workflowService.SubmitAsync(id, cancellationToken);
             TempData["Success"] = "Release submitted.";
         }
-        catch (Exception exception) when (exception is BusinessRuleException or ForbiddenException or ConflictException or FluentValidation.ValidationException)
+        catch (Exception exception) when (IsHandled(exception))
         {
             TempData["Error"] = exception.Message;
         }
 
         return RedirectToAction(nameof(Details), new { id });
     }
+
+    // ------------------------------------------------------------ procedure v4.0 actions
+
+    [HttpPost]
+    [ValidateAntiForgeryToken]
+    public Task<IActionResult> AddReference(AddReleaseReferenceRequest model, CancellationToken cancellationToken) =>
+        RunAsync(model.ReleaseId, "Reference linked.", () => _readiness.AddReferenceAsync(model, cancellationToken));
+
+    [HttpPost]
+    [ValidateAntiForgeryToken]
+    public Task<IActionResult> RemoveReference(Guid releaseId, Guid referenceId, CancellationToken cancellationToken) =>
+        RunAsync(releaseId, "Reference removed.", () => _readiness.RemoveReferenceAsync(releaseId, referenceId, cancellationToken));
+
+    [HttpPost]
+    [ValidateAntiForgeryToken]
+    public Task<IActionResult> SetReadiness(SetReadinessControlRequest model, CancellationToken cancellationToken) =>
+        RunAsync(model.ReleaseId, "Readiness control updated.", () => _readiness.SetControlAsync(model, cancellationToken));
+
+    [HttpPost]
+    [ValidateAntiForgeryToken]
+    public Task<IActionResult> LogCommunication(LogCommunicationRequest model, CancellationToken cancellationToken) =>
+        RunAsync(model.ReleaseId, "Communication logged.", () => _readiness.LogCommunicationAsync(model, cancellationToken));
+
+    [HttpPost]
+    [ValidateAntiForgeryToken]
+    public Task<IActionResult> Reschedule(
+        Guid releaseId,
+        DateTime plannedWindowStart,
+        DateTime plannedWindowEnd,
+        string reason,
+        bool notifyStakeholders,
+        string? audience,
+        CancellationToken cancellationToken) =>
+        RunAsync(releaseId, "Release rescheduled.", () => _readiness.RescheduleAsync(
+            new RescheduleReleaseRequest
+            {
+                ReleaseId = releaseId,
+                PlannedWindowStartUtc = ToUtc(plannedWindowStart),
+                PlannedWindowEndUtc = ToUtc(plannedWindowEnd),
+                Reason = reason,
+                NotifyStakeholders = notifyStakeholders,
+                Audience = audience
+            },
+            cancellationToken));
+
+    [HttpPost]
+    [ValidateAntiForgeryToken]
+    public Task<IActionResult> AssignOwners(Guid releaseId, Guid? technicalOwnerUserId, Guid? releaseManagerUserId, CancellationToken cancellationToken) =>
+        RunAsync(releaseId, "Owners updated.", () => _readiness.AssignOwnersAsync(releaseId, technicalOwnerUserId, releaseManagerUserId, cancellationToken));
+
+    [HttpPost]
+    [ValidateAntiForgeryToken]
+    public Task<IActionResult> TechnicalValidation(RecordTechnicalValidationRequest model, CancellationToken cancellationToken) =>
+        RunAsync(model.ReleaseId, "Technical validation recorded.", () => _postRelease.RecordTechnicalValidationAsync(model, cancellationToken));
+
+    [HttpPost]
+    [ValidateAntiForgeryToken]
+    public Task<IActionResult> BusinessValidation(RecordBusinessValidationRequest model, CancellationToken cancellationToken) =>
+        RunAsync(model.ReleaseId, "Business validation recorded.", () => _postRelease.RecordBusinessValidationAsync(model, cancellationToken));
+
+    [HttpPost]
+    [ValidateAntiForgeryToken]
+    public Task<IActionResult> RecordOutcome(RecordOutcomeRequest model, CancellationToken cancellationToken) =>
+        RunAsync(model.ReleaseId, "Outcome recorded.", () => _postRelease.RecordOutcomeAsync(model, cancellationToken));
+
+    [HttpPost]
+    [ValidateAntiForgeryToken]
+    public async Task<IActionResult> OpenReview(Guid releaseId, CancellationToken cancellationToken)
+    {
+        try
+        {
+            var reviewId = await _postRelease.OpenManualReviewAsync(releaseId, cancellationToken);
+            return RedirectToAction("Details", "Reviews", new { id = reviewId });
+        }
+        catch (Exception exception) when (IsHandled(exception))
+        {
+            TempData["Error"] = exception.Message;
+            return RedirectToAction(nameof(Details), new { id = releaseId });
+        }
+    }
+
+    [HttpPost]
+    [ValidateAntiForgeryToken]
+    public Task<IActionResult> AddFreezeException(AddFreezeExceptionRequest model, CancellationToken cancellationToken) =>
+        RunAsync(model.ReleaseId, "Freeze exception recorded.", () => _planning.AddFreezeExceptionAsync(model, cancellationToken));
+
+    // ------------------------------------------------------------ comments / attachments
 
     [HttpPost]
     [ValidateAntiForgeryToken]
@@ -305,7 +434,7 @@ public sealed class ReleasesController : Controller
             .AsNoTracking()
             .SingleOrDefaultAsync(item => item.Id == model.ReleaseId, cancellationToken);
 
-        if (release is not null)
+        if (release is not null && release.AzureDevOpsWorkItemId.HasValue)
         {
             try
             {
@@ -378,7 +507,7 @@ public sealed class ReleasesController : Controller
             cancellationToken);
         await _dbContext.SaveChangesAsync(cancellationToken);
 
-        TempData["Success"] = "Attachment uploaded.";
+        TempData["Success"] = "Attachment uploaded. Remember: the authoritative evidence should stay in the source system and be linked as a reference (§1.3).";
         return RedirectToAction(nameof(Details), new { id = releaseId });
     }
 
@@ -397,6 +526,51 @@ public sealed class ReleasesController : Controller
         await _authorization.EnsureCanViewAsync(attachment.ReleaseId, cancellationToken);
         var stream = await _fileStorage.DownloadAsync(attachment.StoragePath, cancellationToken);
         return File(stream, attachment.ContentType, attachment.OriginalFileName);
+    }
+
+    // ------------------------------------------------------------ helpers
+
+    private async Task<IActionResult> RunAsync(Guid releaseId, string successMessage, Func<Task> action)
+    {
+        try
+        {
+            await action();
+            TempData["Success"] = successMessage;
+        }
+        catch (Exception exception) when (IsHandled(exception))
+        {
+            TempData["Error"] = exception.Message;
+        }
+
+        return RedirectToAction(nameof(Details), new { id = releaseId });
+    }
+
+    private static bool IsHandled(Exception exception) =>
+        exception is BusinessRuleException
+            or ForbiddenException
+            or ConflictException
+            or NotFoundException
+            or Domain.Exceptions.InvalidReleaseTransitionException
+            or FluentValidation.ValidationException
+            or DbUpdateConcurrencyException;
+
+    private bool TryMoveStep(ReleaseWizardViewModel model, string action)
+    {
+        if (action == "next")
+        {
+            model.Step = Math.Min(WizardSteps, model.Step + 1);
+            ModelState.Remove(nameof(model.Step));
+            return true;
+        }
+
+        if (action == "previous")
+        {
+            model.Step = Math.Max(1, model.Step - 1);
+            ModelState.Remove(nameof(model.Step));
+            return true;
+        }
+
+        return false;
     }
 
     private async Task<ReleaseDetailsPageViewModel> BuildDetailsPageAsync(
@@ -427,8 +601,14 @@ public sealed class ReleasesController : Controller
             .Take(200)
             .ToListAsync(cancellationToken);
 
-        var commentAuthors = await _dbContext.Users.AsNoTracking()
-            .Where(user => comments.Select(item => item.UserId).Contains(user.Id))
+        var userIds = comments.Select(item => item.UserId)
+            .Concat(new[] { details.TechnicalOwnerUserId ?? Guid.Empty, details.ReleaseManagerUserId ?? Guid.Empty })
+            .Where(item => item != Guid.Empty)
+            .Distinct()
+            .ToArray();
+
+        var userNames = await _dbContext.Users.AsNoTracking()
+            .Where(user => userIds.Contains(user.Id))
             .ToDictionaryAsync(user => user.Id, user => user.FullName, cancellationToken);
 
         var attachments = await _dbContext.ReleaseAttachments.AsNoTracking()
@@ -446,6 +626,19 @@ public sealed class ReleasesController : Controller
             .Where(item => serviceIds.Contains(item.Id))
             .ToDictionaryAsync(item => item.Id, item => item.Name, cancellationToken);
 
+        var forecastTitle = details.ForecastId.HasValue
+            ? await _dbContext.ReleaseForecasts.AsNoTracking()
+                .Where(item => item.Id == details.ForecastId.Value)
+                .Select(item => $"Q{item.Quarter} {item.Year} — {item.Title}")
+                .SingleOrDefaultAsync(cancellationToken)
+            : null;
+
+        var users = await _dbContext.Users.AsNoTracking()
+            .Where(user => user.IsActive)
+            .OrderBy(user => user.FullName)
+            .Select(user => new LookupItemViewModel { Id = user.Id, Name = user.FullName })
+            .ToListAsync(cancellationToken);
+
         var serviceRows = details.Services
             .Select(item =>
             {
@@ -454,6 +647,14 @@ public sealed class ReleasesController : Controller
                 return row;
             })
             .ToArray();
+
+        var isRm = _currentUser.IsInRole(RoleNames.ReleaseManager) || _currentUser.IsInRole(RoleNames.Administrator);
+        var isTo = _currentUser.IsInRole(RoleNames.TechnicalOwner) ||
+                   details.TechnicalOwnerUserId == _currentUser.UserId ||
+                   _currentUser.IsInRole(RoleNames.Administrator);
+        var isPo = details.CreatedByUserId == _currentUser.UserId ||
+                   _currentUser.IsInRole(RoleNames.ProductOwner) ||
+                   _currentUser.IsInRole(RoleNames.Administrator);
 
         return new ReleaseDetailsPageViewModel
         {
@@ -504,7 +705,7 @@ public sealed class ReleasesController : Controller
             {
                 Id = item.Id,
                 ParentCommentId = item.ParentCommentId,
-                Author = commentAuthors.GetValueOrDefault(item.UserId, "Unknown"),
+                Author = userNames.GetValueOrDefault(item.UserId, "Unknown"),
                 Comment = item.Comment,
                 CreatedDate = item.CreatedDate,
                 IsInternal = item.IsInternal
@@ -526,7 +727,26 @@ public sealed class ReleasesController : Controller
                 DecisionDate = item.DecisionDate
             }).ToArray(),
             Transition = new TransitionFormViewModel { ReleaseId = id },
-            NewComment = new CommentFormViewModel { ReleaseId = id }
+            NewComment = new CommentFormViewModel { ReleaseId = id },
+            Procedure = details,
+            TechnicalOwnerName = details.TechnicalOwnerUserId is { } toId ? userNames.GetValueOrDefault(toId) : null,
+            ReleaseManagerName = details.ReleaseManagerUserId is { } rmId ? userNames.GetValueOrDefault(rmId) : null,
+            ForecastTitle = forecastTitle,
+            Users = users,
+            ActiveFreezes = details.FreezeConflicts.Select(item => new FreezeConflictRowViewModel
+            {
+                FreezePeriodId = item.FreezePeriodId,
+                Name = item.Name,
+                FreezeType = item.FreezeType.ToString(),
+                StartDate = item.StartDate,
+                EndDate = item.EndDate,
+                Authority = item.Authority,
+                HasException = item.HasException
+            }).ToArray(),
+            IsReleaseManager = isRm,
+            IsTechnicalOwner = isTo,
+            IsProductOwner = isPo,
+            CanEditRecord = isRm || isTo || details.CreatedByUserId == _currentUser.UserId
         };
     }
 
@@ -553,11 +773,50 @@ public sealed class ReleasesController : Controller
                 .OrderBy(item => item.Name)
                 .Select(item => new LookupItemViewModel { Id = item.Id, Name = item.Name })
                 .ToListAsync(cancellationToken);
+
+            var forecasts = await _planning.GetOpenForecastsForProductAsync(model.ProductId, cancellationToken);
+            model.Forecasts = forecasts
+                .Select(item => new LookupItemViewModel
+                {
+                    Id = item.Id,
+                    Name = $"Q{item.Quarter} {item.Year} — {item.Title} ({item.Category})"
+                })
+                .ToArray();
+        }
+
+        var technicalOwners = await _userManager.GetUsersInRoleAsync(RoleNames.TechnicalOwner);
+        var releaseManagers = await _userManager.GetUsersInRoleAsync(RoleNames.ReleaseManager);
+        model.TechnicalOwners = technicalOwners
+            .Concat(releaseManagers)
+            .Where(user => user.IsActive)
+            .GroupBy(user => user.Id)
+            .Select(group => group.First())
+            .OrderBy(user => user.FullName)
+            .Select(user => new LookupItemViewModel { Id = user.Id, Name = user.FullName })
+            .ToArray();
+
+        if (model.PlannedWindowEnd > model.PlannedWindowStart)
+        {
+            var conflicts = await _planning.GetFreezeConflictsAsync(
+                model.ReleaseId,
+                ToUtc(model.PlannedWindowStart),
+                ToUtc(model.PlannedWindowEnd),
+                cancellationToken);
+
+            model.FreezeWarnings = conflicts
+                .Where(item => !item.HasException)
+                .Select(item => $"{item.Name} ({item.FreezeType}) {item.StartDate.ToLocalTime():g} – {item.EndDate.ToLocalTime():g}, authority: {item.Authority}")
+                .ToArray();
         }
 
         if (model.Services.Count == 0)
         {
             model.Services.Add(new ReleaseServiceRowViewModel());
+        }
+
+        if (model.References.Count == 0)
+        {
+            model.References.Add(new ReleaseReferenceRowViewModel());
         }
 
         return model;
@@ -570,12 +829,12 @@ public sealed class ReleasesController : Controller
             Description = model.Description,
             ProductId = model.ProductId,
             EnvironmentId = model.EnvironmentId,
-            PlannedReleaseDateUtc = DateTime.SpecifyKind(model.PlannedReleaseDate.Date, DateTimeKind.Utc),
+            PlannedReleaseDateUtc = ToUtc(model.PlannedWindowStart),
             ReleaseType = model.ReleaseType,
             Priority = model.Priority,
             ReleaseVersion = model.ReleaseVersion,
             BusinessReason = string.Empty,
-            ImpactDescription = string.Empty,
+            ImpactDescription = model.ImpactDescription,
             TestingSummary = model.TestingSummary,
             RiskLevel = model.RiskLevel,
             RiskDescription = model.RiskDescription,
@@ -584,38 +843,83 @@ public sealed class ReleasesController : Controller
             MonitoringPlan = model.MonitoringPlan,
             PostReleaseValidationPlan = model.PostReleaseValidationPlan,
             DowntimeRequired = model.DowntimeRequired,
-            ExpectedDowntimeMinutes = model.ExpectedDowntimeMinutes,
+            ExpectedDowntimeMinutes = model.DowntimeRequired ? model.ExpectedDowntimeMinutes : null,
             Services = model.Services
                 .Where(item => item.ServiceId != Guid.Empty)
                 .Select(MapServiceDto)
+                .ToList(),
+            ClassificationCriteria = model.CriteriaFlags,
+            SecurityTriggers = model.TriggerFlags,
+            ExecutionMode = model.ExecutionMode,
+            ExpeditedJustification = model.ExpeditedJustification,
+            DirectorApprovalReference = model.DirectorApprovalReference,
+            PlannedWindowStartUtc = ToUtc(model.PlannedWindowStart),
+            PlannedWindowEndUtc = ToUtc(model.PlannedWindowEnd),
+            PlannedMaintenance = model.PlannedMaintenance,
+            MaintenanceApprovalReference = model.MaintenanceApprovalReference,
+            OperationalImpact = model.OperationalImpact,
+            KeyDependencies = model.KeyDependencies,
+            RecoveryApproach = model.RecoveryApproach,
+            RecoveryDecisionPoints = model.RecoveryDecisionPoints,
+            RecoveryResponsibleParties = model.RecoveryResponsibleParties,
+            TechnicalOwnerUserId = model.TechnicalOwnerUserId,
+            ForecastId = model.ForecastId,
+            References = model.References
+                .Where(item => !string.IsNullOrWhiteSpace(item.ExternalId))
+                .Select(item => new ReleaseReferenceInputDto
+                {
+                    ReferenceType = item.ReferenceType,
+                    ExternalId = item.ExternalId!.Trim(),
+                    Url = item.Url,
+                    Title = item.Title
+                })
                 .ToList()
         };
 
     private static UpdateReleaseDraftRequest MapUpdateRequest(ReleaseWizardViewModel model)
     {
-        var request = new UpdateReleaseDraftRequest { ReleaseId = model.ReleaseId!.Value };
         var create = MapCreateRequest(model);
-        request.Title = create.Title;
-        request.Description = create.Description;
-        request.ProductId = create.ProductId;
-        request.EnvironmentId = create.EnvironmentId;
-        request.PlannedReleaseDateUtc = create.PlannedReleaseDateUtc;
-        request.ReleaseType = create.ReleaseType;
-        request.Priority = create.Priority;
-        request.ReleaseVersion = create.ReleaseVersion;
-        request.BusinessReason = create.BusinessReason;
-        request.ImpactDescription = create.ImpactDescription;
-        request.TestingSummary = create.TestingSummary;
-        request.RiskLevel = create.RiskLevel;
-        request.RiskDescription = create.RiskDescription;
-        request.DeploymentPlan = create.DeploymentPlan;
-        request.RollbackPlan = create.RollbackPlan;
-        request.MonitoringPlan = create.MonitoringPlan;
-        request.PostReleaseValidationPlan = create.PostReleaseValidationPlan;
-        request.DowntimeRequired = create.DowntimeRequired;
-        request.ExpectedDowntimeMinutes = create.ExpectedDowntimeMinutes;
-        request.Services = create.Services;
-        return request;
+        return new UpdateReleaseDraftRequest
+        {
+            ReleaseId = model.ReleaseId!.Value,
+            Title = create.Title,
+            Description = create.Description,
+            ProductId = create.ProductId,
+            EnvironmentId = create.EnvironmentId,
+            PlannedReleaseDateUtc = create.PlannedReleaseDateUtc,
+            ReleaseType = create.ReleaseType,
+            Priority = create.Priority,
+            ReleaseVersion = create.ReleaseVersion,
+            BusinessReason = create.BusinessReason,
+            ImpactDescription = create.ImpactDescription,
+            TestingSummary = create.TestingSummary,
+            RiskLevel = create.RiskLevel,
+            RiskDescription = create.RiskDescription,
+            DeploymentPlan = create.DeploymentPlan,
+            RollbackPlan = create.RollbackPlan,
+            MonitoringPlan = create.MonitoringPlan,
+            PostReleaseValidationPlan = create.PostReleaseValidationPlan,
+            DowntimeRequired = create.DowntimeRequired,
+            ExpectedDowntimeMinutes = create.ExpectedDowntimeMinutes,
+            Services = create.Services,
+            ClassificationCriteria = create.ClassificationCriteria,
+            SecurityTriggers = create.SecurityTriggers,
+            ExecutionMode = create.ExecutionMode,
+            ExpeditedJustification = create.ExpeditedJustification,
+            DirectorApprovalReference = create.DirectorApprovalReference,
+            PlannedWindowStartUtc = create.PlannedWindowStartUtc,
+            PlannedWindowEndUtc = create.PlannedWindowEndUtc,
+            PlannedMaintenance = create.PlannedMaintenance,
+            MaintenanceApprovalReference = create.MaintenanceApprovalReference,
+            OperationalImpact = create.OperationalImpact,
+            KeyDependencies = create.KeyDependencies,
+            RecoveryApproach = create.RecoveryApproach,
+            RecoveryDecisionPoints = create.RecoveryDecisionPoints,
+            RecoveryResponsibleParties = create.RecoveryResponsibleParties,
+            TechnicalOwnerUserId = create.TechnicalOwnerUserId,
+            ForecastId = create.ForecastId,
+            References = create.References
+        };
     }
 
     private static ReleaseServiceInputDto MapServiceDto(ReleaseServiceRowViewModel item) =>
@@ -660,6 +964,23 @@ public sealed class ReleasesController : Controller
             CurrentStatusDisplay = item.CurrentStatusDisplay,
             CurrentResponsibleDisplay = item.CurrentResponsibleDisplay,
             UpdatedDate = item.UpdatedDate,
-            ActionRequiredFromCurrentUser = item.ActionRequiredFromCurrentUser
+            ActionRequiredFromCurrentUser = item.ActionRequiredFromCurrentUser,
+            Category = item.Category,
+            ExecutionMode = item.ExecutionMode
         };
+
+    private static List<T> ExpandFlags<T>(T flags)
+        where T : struct, Enum
+    {
+        return Enum.GetValues<T>()
+            .Where(value => !EqualityComparer<T>.Default.Equals(value, default) && flags.HasFlag(value))
+            .ToList();
+    }
+
+    /// <summary>datetime-local inputs are entered in the server's local time zone.</summary>
+    private static DateTime ToUtc(DateTime local) =>
+        DateTime.SpecifyKind(local, DateTimeKind.Local).ToUniversalTime();
+
+    private static DateTime ToLocal(DateTime utc) =>
+        DateTime.SpecifyKind(utc, DateTimeKind.Utc).ToLocalTime();
 }

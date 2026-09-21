@@ -42,7 +42,7 @@ public sealed class AzureDevOpsReleaseSyncService : IAzureDevOpsReleaseSyncServi
         Release release,
         CancellationToken cancellationToken = default)
     {
-        if (!_options.Enabled || release.AzureDevOpsWorkItemId.HasValue)
+        if (!_options.Enabled || !_options.CreateWorkItemOnSubmit || release.AzureDevOpsWorkItemId.HasValue)
         {
             return;
         }

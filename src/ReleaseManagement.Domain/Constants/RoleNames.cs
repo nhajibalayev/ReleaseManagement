@@ -14,6 +14,11 @@ public static class RoleNames
     public const string Risk = "Risk";
     public const string ChapterLead = "ChapterLead";
 
+    // Procedure v4.0 §2 roles.
+    public const string TechnicalOwner = "TechnicalOwner";
+    public const string DBA = "DBA";
+    public const string ITOperations = "ITOperations";
+
     public static IReadOnlySet<string> All { get; } =
         new HashSet<string>(StringComparer.OrdinalIgnoreCase)
         {
@@ -27,6 +32,9 @@ public static class RoleNames
             Auditor,
             QA,
             Risk,
-            ChapterLead
+            ChapterLead,
+            TechnicalOwner,
+            DBA,
+            ITOperations
         };
 }

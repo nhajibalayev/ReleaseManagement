@@ -65,6 +65,10 @@ public sealed class ReleaseListItemViewModel
     public DateTime UpdatedDate { get; init; }
 
     public bool ActionRequiredFromCurrentUser { get; init; }
+
+    public ReleaseCategory Category { get; init; }
+
+    public ExecutionMode ExecutionMode { get; init; }
 }
 
 public sealed class ReleaseWizardViewModel
@@ -141,6 +145,100 @@ public sealed class ReleaseWizardViewModel
     public IReadOnlyCollection<LookupItemViewModel> Environments { get; set; } = [];
 
     public IReadOnlyCollection<LookupItemViewModel> AvailableServices { get; set; } = [];
+
+    // ---- Procedure v4.0 (§3.2 window, §4 classification, §5.3 recovery, §1.3 links) ----
+
+    [Required]
+    [Display(Name = "Planned window start")]
+    public DateTime PlannedWindowStart { get; set; } = DateTime.UtcNow.Date.AddDays(7).AddHours(20);
+
+    [Required]
+    [Display(Name = "Planned window end")]
+    public DateTime PlannedWindowEnd { get; set; } = DateTime.UtcNow.Date.AddDays(7).AddHours(22);
+
+    [Display(Name = "Planned maintenance (approved maintenance window)")]
+    public bool PlannedMaintenance { get; set; }
+
+    [MaxLength(500)]
+    [Display(Name = "Maintenance window approval reference")]
+    public string? MaintenanceApprovalReference { get; set; }
+
+    [Display(Name = "Monitoring / support / capacity affected (operational readiness)")]
+    public bool OperationalImpact { get; set; }
+
+    [MaxLength(2000)]
+    [Display(Name = "Key dependencies")]
+    public string? KeyDependencies { get; set; }
+
+    [MaxLength(4000)]
+    [Display(Name = "Customer / business impact")]
+    public string? ImpactDescription { get; set; }
+
+    [Display(Name = "Technical Owner")]
+    public Guid? TechnicalOwnerUserId { get; set; }
+
+    [Display(Name = "Quarterly forecast entry")]
+    public Guid? ForecastId { get; set; }
+
+    public List<ClassificationCriteria> Criteria { get; set; } = [];
+
+    public List<SecurityTriggers> Triggers { get; set; } = [];
+
+    [Display(Name = "Execution mode")]
+    public ExecutionMode ExecutionMode { get; set; } = ExecutionMode.Planned;
+
+    [MaxLength(2000)]
+    [Display(Name = "Expedited justification (urgency)")]
+    public string? ExpeditedJustification { get; set; }
+
+    [MaxLength(500)]
+    [Display(Name = "IT Department Director authorization reference")]
+    public string? DirectorApprovalReference { get; set; }
+
+    [Display(Name = "Recovery approach")]
+    public RecoveryApproach RecoveryApproach { get; set; } = RecoveryApproach.StandardPipelineRollback;
+
+    [MaxLength(4000)]
+    [Display(Name = "Recovery decision points (Major)")]
+    public string? RecoveryDecisionPoints { get; set; }
+
+    [MaxLength(1000)]
+    [Display(Name = "Recovery responsible parties (Major)")]
+    public string? RecoveryResponsibleParties { get; set; }
+
+    public List<ReleaseReferenceRowViewModel> References { get; set; } = [new()];
+
+    public IReadOnlyCollection<LookupItemViewModel> TechnicalOwners { get; set; } = [];
+
+    public IReadOnlyCollection<LookupItemViewModel> Forecasts { get; set; } = [];
+
+    public IReadOnlyCollection<string> FreezeWarnings { get; set; } = [];
+
+    public ClassificationCriteria CriteriaFlags =>
+        Criteria.Aggregate(ClassificationCriteria.None, (current, item) => current | item);
+
+    public SecurityTriggers TriggerFlags =>
+        Triggers.Aggregate(SecurityTriggers.None, (current, item) => current | item);
+
+    public ReleaseCategory PreviewCategory =>
+        Domain.Rules.ReleaseClassificationRules.Classify(
+            CriteriaFlags,
+            Services.Any(service => service.ServiceId != Guid.Empty && service.DatabaseChanges),
+            DowntimeRequired);
+}
+
+public sealed class ReleaseReferenceRowViewModel
+{
+    public ReleaseReferenceType ReferenceType { get; set; } = ReleaseReferenceType.WorkItem;
+
+    [MaxLength(200)]
+    public string? ExternalId { get; set; }
+
+    [MaxLength(2048)]
+    public string? Url { get; set; }
+
+    [MaxLength(500)]
+    public string? Title { get; set; }
 }
 
 public sealed class ReleaseServiceRowViewModel
@@ -232,6 +330,44 @@ public sealed class ReleaseDetailsPageViewModel
     public TransitionFormViewModel Transition { get; init; } = new();
 
     public CommentFormViewModel NewComment { get; init; } = new();
+
+    /// <summary>Procedure v4.0 sections (readiness, links, communication, validation, PIR, gates).</summary>
+    public ReleaseManagement.Application.DTOs.Releases.ReleaseDetailsDto Procedure { get; init; } = null!;
+
+    public string? TechnicalOwnerName { get; init; }
+
+    public string? ReleaseManagerName { get; init; }
+
+    public string? ForecastTitle { get; init; }
+
+    public IReadOnlyCollection<LookupItemViewModel> Users { get; init; } = [];
+
+    public IReadOnlyCollection<FreezeConflictRowViewModel> ActiveFreezes { get; init; } = [];
+
+    public bool IsReleaseManager { get; init; }
+
+    public bool IsTechnicalOwner { get; init; }
+
+    public bool IsProductOwner { get; init; }
+
+    public bool CanEditRecord { get; init; }
+}
+
+public sealed class FreezeConflictRowViewModel
+{
+    public Guid FreezePeriodId { get; init; }
+
+    public string Name { get; init; } = string.Empty;
+
+    public string FreezeType { get; init; } = string.Empty;
+
+    public DateTime StartDate { get; init; }
+
+    public DateTime EndDate { get; init; }
+
+    public string Authority { get; init; } = string.Empty;
+
+    public bool HasException { get; init; }
 }
 
 public sealed class ReleaseStatusSummaryViewModel
@@ -265,6 +401,11 @@ public sealed class TransitionFormViewModel
 
     [MaxLength(4000)]
     public string? Comment { get; set; }
+
+    public DateTime? StabilizationEnd { get; set; }
+
+    [MaxLength(2000)]
+    public string? StabilizationNotes { get; set; }
 }
 
 public sealed class CommentFormViewModel
@@ -366,4 +507,164 @@ public sealed class PendingApprovalRowViewModel
     public ApprovalType ApprovalType { get; init; }
 
     public DateTime? SlaDueDate { get; init; }
+}
+
+public sealed class ReadinessQueueRowViewModel
+{
+    public Guid ReleaseId { get; init; }
+
+    public string ReleaseNumber { get; init; } = string.Empty;
+
+    public string Title { get; init; } = string.Empty;
+
+    public string? ProductName { get; init; }
+
+    public ReleaseCategory Category { get; init; }
+
+    public ExecutionMode ExecutionMode { get; init; }
+
+    public DateTime PlannedWindowStart { get; init; }
+
+    public string PendingControls { get; init; } = string.Empty;
+}
+
+public sealed class PendingWorkPageViewModel
+{
+    public IReadOnlyCollection<ReadinessQueueRowViewModel> Readiness { get; init; } = [];
+
+    public IReadOnlyCollection<PendingApprovalRowViewModel> Legacy { get; init; } = [];
+}
+
+public sealed class CalendarPageViewModel
+{
+    public IReadOnlyCollection<CalendarRowViewModel> Releases { get; init; } = [];
+
+    public IReadOnlyCollection<FreezeConflictRowViewModel> Freezes { get; init; } = [];
+}
+
+public sealed class CalendarRowViewModel
+{
+    public Guid Id { get; init; }
+
+    public string ReleaseNumber { get; init; } = string.Empty;
+
+    public string Title { get; init; } = string.Empty;
+
+    public string Track { get; init; } = string.Empty;
+
+    public ReleaseCategory Category { get; init; }
+
+    public ExecutionMode ExecutionMode { get; init; }
+
+    public string? ProductName { get; init; }
+
+    public string? EnvironmentName { get; init; }
+
+    public string Services { get; init; } = string.Empty;
+
+    public DateTime WindowStart { get; init; }
+
+    public DateTime WindowEnd { get; init; }
+
+    public string? ReleaseManagerName { get; init; }
+
+    public bool DowntimeRequired { get; init; }
+
+    public int? ExpectedDowntimeMinutes { get; init; }
+
+    public bool PlannedMaintenance { get; init; }
+
+    public string KeyDependencies { get; init; } = string.Empty;
+
+    public ReleaseStatus CurrentStatus { get; init; }
+
+    public string CurrentStatusDisplay { get; init; } = string.Empty;
+
+    public bool InFreeze { get; init; }
+}
+
+public sealed class ForecastPageViewModel
+{
+    public int Year { get; init; }
+
+    public int Quarter { get; init; }
+
+    public IReadOnlyCollection<ReleaseManagement.Application.DTOs.Procedure.ReleaseForecastDto> Items { get; init; } = [];
+
+    public IReadOnlyCollection<LookupItemViewModel> Products { get; init; } = [];
+
+    public ForecastFormViewModel Form { get; init; } = new();
+}
+
+public sealed class ForecastFormViewModel
+{
+    public Guid? Id { get; set; }
+
+    public int Year { get; set; } = DateTime.UtcNow.Year;
+
+    public int Quarter { get; set; } = (DateTime.UtcNow.Month - 1) / 3 + 1;
+
+    [Required]
+    public Guid ProductId { get; set; }
+
+    [Required]
+    [MaxLength(200)]
+    public string Title { get; set; } = string.Empty;
+
+    public ReleaseCategory Category { get; set; } = ReleaseCategory.Normal;
+
+    [Required]
+    [MaxLength(200)]
+    public string Team { get; set; } = string.Empty;
+
+    [DataType(DataType.Date)]
+    public DateTime? ExpectedDate { get; set; }
+
+    [MaxLength(2000)]
+    public string? Dependencies { get; set; }
+
+    [MaxLength(4000)]
+    public string? Notes { get; set; }
+
+    public ForecastStatus Status { get; set; } = ForecastStatus.Planned;
+}
+
+public sealed class FreezePageViewModel
+{
+    public IReadOnlyCollection<ReleaseManagement.Application.DTOs.Procedure.FreezePeriodDto> Items { get; init; } = [];
+
+    public FreezeFormViewModel Form { get; init; } = new();
+}
+
+public sealed class FreezeFormViewModel
+{
+    [Required]
+    [MaxLength(200)]
+    public string Name { get; set; } = string.Empty;
+
+    public FreezeType FreezeType { get; set; } = FreezeType.ItTechnical;
+
+    [Required]
+    public DateTime StartDate { get; set; } = DateTime.UtcNow.Date;
+
+    [Required]
+    public DateTime EndDate { get; set; } = DateTime.UtcNow.Date.AddDays(7);
+
+    [Required]
+    [MaxLength(300)]
+    public string Authority { get; set; } = string.Empty;
+
+    [MaxLength(2000)]
+    public string? Description { get; set; }
+}
+
+public sealed class KpiPageViewModel
+{
+    public IReadOnlyCollection<ReleaseManagement.Application.DTOs.Procedure.MonthlyKpiDto> Months { get; init; } = [];
+
+    public int OpenReviews { get; init; }
+
+    public int ActiveFreezes { get; init; }
+
+    public int ReleasesInReadiness { get; init; }
 }

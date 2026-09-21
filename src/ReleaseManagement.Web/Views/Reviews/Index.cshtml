@@ -1,0 +1,29 @@
+@model IReadOnlyCollection<ReleaseManagement.Application.DTOs.Procedure.PostImplementationReviewDto>
+@{
+    ViewData["Title"] = "Post-Release Reviews";
+}
+
+<div class="mb-3">
+    <h1 class="h3 mb-1">Post-Release Reviews (PIR)</h1>
+    <p class="text-muted mb-0">§7.3: not for every release. Mandatory after Expedited releases, failed deployment / validation, rollback / roll-forward / urgent remediation, release-related incidents, significant customer impact, serious security / data issues and repeated failures.</p>
+</div>
+<section class="panel">
+    <table class="table table-hover align-middle mb-0">
+        <thead><tr><th>Release</th><th>Triggers</th><th>Format</th><th>Status</th><th>Actions</th><th>Opened</th><th></th></tr></thead>
+        <tbody>
+        @foreach (var item in Model)
+        {
+            <tr>
+                <td><a asp-controller="Releases" asp-action="Details" asp-route-id="@item.ReleaseId">@item.ReleaseNumber</a><div class="small text-muted">@item.ReleaseTitle</div></td>
+                <td class="small">@item.Triggers</td>
+                <td>@item.Format</td>
+                <td><span class="status-badge @(item.Status == PirStatus.Completed ? "ok" : "action")">@item.Status</span></td>
+                <td>@item.Actions.Count(a => a.IsCompleted) / @item.Actions.Count</td>
+                <td class="small">@item.CreatedDate.ToLocalTime().ToString("g")</td>
+                <td class="text-end"><a asp-action="Details" asp-route-id="@item.Id" class="btn btn-sm btn-outline-secondary">Open</a></td>
+            </tr>
+        }
+        @if (!Model.Any()) { <tr><td colspan="7" class="text-center text-muted py-4">No reviews.</td></tr> }
+        </tbody>
+    </table>
+</section>

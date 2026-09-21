@@ -1,0 +1,94 @@
+@using ReleaseManagement.Application.Abstractions
+@inject ICurrentUserService CurrentUser
+@model ReleaseManagement.Application.DTOs.Procedure.PostImplementationReviewDto
+@{
+    ViewData["Title"] = $"PIR {Model.ReleaseNumber}";
+    var canEdit = Model.Status != PirStatus.Completed &&
+                  (CurrentUser.IsInRole("ReleaseManager") || CurrentUser.IsInRole("TechnicalOwner") || CurrentUser.IsInRole("Administrator"));
+}
+
+<div class="panel">
+    <div class="d-flex flex-wrap justify-content-between gap-3">
+        <div>
+            <div class="text-muted fw-semibold">Post-Release Review</div>
+            <h1 class="h3 mb-2"><a asp-controller="Releases" asp-action="Details" asp-route-id="@Model.ReleaseId">@Model.ReleaseNumber</a> — @Model.ReleaseTitle</h1>
+            <span class="status-badge @(Model.Status == PirStatus.Completed ? "ok" : "action")">@Model.Status</span>
+            <span class="status-badge">@Model.Format</span>
+        </div>
+        <div class="text-md-end text-muted">
+            <div>Triggers: @Model.Triggers</div>
+            <div>Opened @Model.CreatedDate.ToLocalTime().ToString("g")@(Model.CompletedDate is null ? "" : $" · completed {Model.CompletedDate.Value.ToLocalTime():g}")</div>
+        </div>
+    </div>
+</div>
+
+<div class="row g-4">
+    <div class="col-lg-7">
+        <section class="panel">
+            <h2 class="h5">Root cause, lessons learned, backlog link</h2>
+            @if (canEdit)
+            {
+                <form asp-action="Update" method="post">
+                    @Html.AntiForgeryToken()
+                    <input type="hidden" name="ReviewId" value="@Model.Id" />
+                    <div class="mb-2"><label class="form-label">Format</label><select name="Format" class="form-select" asp-items="@(new SelectList(Enum.GetValues<PirFormat>(), Model.Format))"></select></div>
+                    <div class="mb-2"><label class="form-label">Root cause</label><textarea name="RootCause" class="form-control" rows="4">@Model.RootCause</textarea></div>
+                    <div class="mb-2"><label class="form-label">Lessons learned</label><textarea name="LessonsLearned" class="form-control" rows="4">@Model.LessonsLearned</textarea></div>
+                    <div class="mb-3"><label class="form-label">Backlog reference (work item / epic)</label><input name="BacklogReference" class="form-control" value="@Model.BacklogReference" /></div>
+                    <button class="btn btn-accent" type="submit">Save</button>
+                </form>
+            }
+            else
+            {
+                <h3 class="h6">Root cause</h3><p style="white-space: pre-wrap">@(Model.RootCause ?? "—")</p>
+                <h3 class="h6">Lessons learned</h3><p style="white-space: pre-wrap">@(Model.LessonsLearned ?? "—")</p>
+                <h3 class="h6">Backlog reference</h3><p>@(Model.BacklogReference ?? "—")</p>
+            }
+        </section>
+    </div>
+    <div class="col-lg-5">
+        <section class="panel">
+            <h2 class="h5">Corrective actions (owner + target date)</h2>
+            <table class="table align-middle">
+                <tbody>
+                @foreach (var action in Model.Actions)
+                {
+                    <tr class="@(action.IsCompleted ? "text-muted" : "")">
+                        <td>@action.Description<div class="small text-muted">@action.OwnerName · due @action.TargetDate.ToLocalTime().ToString("d") @(string.IsNullOrWhiteSpace(action.Reference) ? "" : $"· {action.Reference}")</div></td>
+                        <td class="text-end">
+                            @if (action.IsCompleted)
+                            {
+                                <span class="status-badge ok">Done</span>
+                            }
+                            else if (canEdit)
+                            {
+                                <form asp-action="CompleteAction" method="post" class="d-inline">@Html.AntiForgeryToken()<input type="hidden" name="reviewId" value="@Model.Id" /><input type="hidden" name="actionId" value="@action.Id" /><button class="btn btn-sm btn-outline-secondary" type="submit">Mark done</button></form>
+                            }
+                        </td>
+                    </tr>
+                }
+                @if (!Model.Actions.Any()) { <tr><td class="text-muted">No actions yet — at least one is required to complete the review.</td></tr> }
+                </tbody>
+            </table>
+            @if (canEdit)
+            {
+                <form asp-action="AddAction" method="post" class="row g-2">
+                    @Html.AntiForgeryToken()
+                    <input type="hidden" name="ReviewId" value="@Model.Id" />
+                    <div class="col-12"><input name="Description" class="form-control form-control-sm" placeholder="Action" required /></div>
+                    <div class="col-5"><input name="OwnerName" class="form-control form-control-sm" placeholder="Owner" required /></div>
+                    <div class="col-4"><input name="TargetDateUtc" type="date" class="form-control form-control-sm" required /></div>
+                    <div class="col-3"><button class="btn btn-sm btn-accent w-100" type="submit">Add</button></div>
+                    <div class="col-12"><input name="Reference" class="form-control form-control-sm" placeholder="Backlog / ticket reference (optional)" /></div>
+                </form>
+                <hr />
+                <form asp-action="Complete" method="post">
+                    @Html.AntiForgeryToken()
+                    <input type="hidden" name="reviewId" value="@Model.Id" />
+                    <button class="btn btn-success" type="submit">Complete review</button>
+                    <div class="form-text">Requires root cause, lessons learned and at least one action.</div>
+                </form>
+            }
+        </section>
+    </div>
+</div>

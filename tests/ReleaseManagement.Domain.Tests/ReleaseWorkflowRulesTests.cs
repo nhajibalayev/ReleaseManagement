@@ -11,23 +11,23 @@ public sealed class ReleaseWorkflowRulesTests
     [InlineData(ReleaseStatus.Draft, ReleaseStatus.Submitted, RoleNames.ProductOwner)]
     [InlineData(
         ReleaseStatus.ReleaseManagerReview,
-        ReleaseStatus.QaReview,
+        ReleaseStatus.ReadinessInProgress,
         RoleNames.ReleaseManager)]
     [InlineData(
         ReleaseStatus.ReleaseManagerReview,
-        ReleaseStatus.InfoSecReview,
+        ReleaseStatus.ReturnedForRevision,
         RoleNames.ReleaseManager)]
     [InlineData(
-        ReleaseStatus.ReleaseManagerReview,
-        ReleaseStatus.RiskReview,
+        ReleaseStatus.ReadinessInProgress,
+        ReleaseStatus.ReadyForRelease,
         RoleNames.ReleaseManager)]
     [InlineData(
-        ReleaseStatus.ReleaseManagerReview,
-        ReleaseStatus.ChapterLeadReview,
-        RoleNames.ReleaseManager)]
+        ReleaseStatus.Deployed,
+        ReleaseStatus.Stabilization,
+        RoleNames.TechnicalOwner)]
     [InlineData(
-        ReleaseStatus.ReleaseManagerReview,
-        ReleaseStatus.Approved,
+        ReleaseStatus.Stabilization,
+        ReleaseStatus.Closed,
         RoleNames.ReleaseManager)]
     [InlineData(
         ReleaseStatus.QaReview,
@@ -49,10 +49,6 @@ public sealed class ReleaseWorkflowRulesTests
         ReleaseStatus.ReadyForRelease,
         ReleaseStatus.DeploymentInProgress,
         RoleNames.DevOps)]
-    [InlineData(
-        ReleaseStatus.Deployed,
-        ReleaseStatus.Closed,
-        RoleNames.ReleaseManager)]
     public void CanTransition_ReturnsTrue_ForDefinedTransitionAndRole(
         ReleaseStatus currentStatus,
         ReleaseStatus targetStatus,
@@ -63,12 +59,29 @@ public sealed class ReleaseWorkflowRulesTests
         Assert.True(result);
     }
 
-    [Fact]
-    public void CanTransition_ReturnsFalse_WhenRmTriesOldLinearPentestPath()
+    [Theory]
+    [InlineData(ReleaseStatus.PentestReview)]
+    [InlineData(ReleaseStatus.QaReview)]
+    [InlineData(ReleaseStatus.InfoSecReview)]
+    [InlineData(ReleaseStatus.Approved)]
+    public void CanTransition_ReturnsFalse_WhenRmTriesToRouteApprovals(ReleaseStatus target)
     {
+        // Procedure v4.0 §2: RM coordinates readiness evidence; it does not route in-app approvals.
         var result = ReleaseWorkflowRules.CanTransition(
             ReleaseStatus.ReleaseManagerReview,
-            ReleaseStatus.PentestReview,
+            target,
+            [RoleNames.ReleaseManager]);
+
+        Assert.False(result);
+    }
+
+    [Fact]
+    public void CanTransition_ReturnsFalse_WhenClosingDirectlyFromDeployed()
+    {
+        // §7.2: validation and stabilization come before closure.
+        var result = ReleaseWorkflowRules.CanTransition(
+            ReleaseStatus.Deployed,
+            ReleaseStatus.Closed,
             [RoleNames.ReleaseManager]);
 
         Assert.False(result);

@@ -96,13 +96,23 @@ public sealed class DevelopmentDataSeeder
             ("risk", "Risk User", "risk@local.test", RoleNames.Risk),
             ("chapterlead", "Chapter Lead", "chapterlead@local.test", RoleNames.ChapterLead),
             ("devops", "DevOps User", "devops@local.test", RoleNames.DevOps),
-            ("auditor", "Auditor", "auditor@local.test", RoleNames.Auditor)
+            ("auditor", "Auditor", "auditor@local.test", RoleNames.Auditor),
+            ("techowner", "Technical Owner", "techowner@local.test", RoleNames.TechnicalOwner),
+            ("dba", "DBA / Data Engineering", "dba@local.test", RoleNames.DBA),
+            ("itops", "IT Operations", "itops@local.test", RoleNames.ITOperations)
         };
 
         foreach (var user in users)
         {
             var identityUser = await EnsureIdentityUserAsync(user, cancellationToken);
             await EnsureApplicationUserAsync(identityUser, cancellationToken);
+
+            // Today one person acts as both Release Manager and Technical Owner (§2).
+            if (user.Role == RoleNames.ReleaseManager &&
+                !await _userManager.IsInRoleAsync(identityUser, RoleNames.TechnicalOwner))
+            {
+                await _userManager.AddToRoleAsync(identityUser, RoleNames.TechnicalOwner);
+            }
 
             if (user.Role == RoleNames.ProductOwner)
             {

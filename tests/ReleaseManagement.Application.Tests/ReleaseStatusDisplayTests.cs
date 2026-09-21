@@ -13,6 +13,8 @@ public sealed class ReleaseStatusDisplayTests
     [InlineData(ReleaseStatus.QaReview, "QA Review", "QA")]
     [InlineData(ReleaseStatus.RiskReview, "Risk Review", "Risk")]
     [InlineData(ReleaseStatus.ChapterLeadReview, "Chapter Lead Review", "Chapter Lead")]
+    [InlineData(ReleaseStatus.ReadinessInProgress, "Readiness In Progress", "Release Manager")]
+    [InlineData(ReleaseStatus.Stabilization, "Stabilization", "Release Manager")]
     public void Formats_status_and_responsible_role(
         ReleaseStatus status,
         string expectedStatus,

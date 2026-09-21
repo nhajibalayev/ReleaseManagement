@@ -37,6 +37,25 @@ public interface IApplicationDbContext
 
     DbSet<AzureDevOpsMapping> AzureDevOpsMappings { get; }
 
+    // Procedure v4.0 alignment.
+    DbSet<ReleaseReference> ReleaseReferences { get; }
+
+    DbSet<ReadinessControl> ReadinessControls { get; }
+
+    DbSet<ReleaseCommunication> ReleaseCommunications { get; }
+
+    DbSet<PostReleaseValidation> PostReleaseValidations { get; }
+
+    DbSet<PostImplementationReview> PostImplementationReviews { get; }
+
+    DbSet<PirAction> PirActions { get; }
+
+    DbSet<ReleaseForecast> ReleaseForecasts { get; }
+
+    DbSet<FreezePeriod> FreezePeriods { get; }
+
+    DbSet<FreezeException> FreezeExceptions { get; }
+
     Task ReloadAsync<TEntity>(TEntity entity, CancellationToken cancellationToken = default)
         where TEntity : class;
 
