@@ -1,0 +1,69 @@
+@using ReleaseManagement.Web.Controllers.Admin
+@model UserEditViewModel
+@{
+    ViewData["Title"] = $"Roles — {Model.UserName}";
+}
+
+<div class="mb-3">
+    <a asp-action="Index" class="text-decoration-none">&larr; Users</a>
+    <h1 class="h3 mb-1 mt-2">@Model.UserName</h1>
+    <p class="text-muted mb-0">@Model.FullName @(string.IsNullOrWhiteSpace(Model.Email) ? "" : $"· {Model.Email}")</p>
+</div>
+
+<div class="row g-4">
+    <div class="col-lg-6">
+        <section class="panel">
+            <h2 class="h5">Roles</h2>
+            <form asp-action="Edit" asp-route-id="@Model.Id" method="post">
+                @foreach (var role in Model.AllRoles)
+                {
+                    var checkboxId = $"role-{role}";
+                    var isAdminSelf = Model.IsSelf && role == "Administrator";
+                    <div class="form-check mb-2">
+                        <input type="checkbox" class="form-check-input" id="@checkboxId" name="roles" value="@role"
+                               @(Model.AssignedRoles.Contains(role) ? "checked" : "")
+                               @(isAdminSelf ? "disabled" : "") />
+                        <label class="form-check-label" for="@checkboxId">@role</label>
+                    </div>
+                    @if (isAdminSelf)
+                    {
+                        <input type="hidden" name="roles" value="Administrator" />
+                    }
+                }
+
+                <hr />
+
+                <div class="form-check mb-3">
+                    @if (Model.IsSelf)
+                    {
+                        <input type="checkbox" class="form-check-input" id="isActive" checked disabled />
+                        <input type="hidden" name="isActive" value="true" />
+                    }
+                    else
+                    {
+                        <input type="checkbox" class="form-check-input" id="isActive" name="isActive" value="true" @(Model.IsActive ? "checked" : "") />
+                        <input type="hidden" name="isActive" value="false" />
+                    }
+                    <label class="form-check-label" for="isActive">Account is active</label>
+                </div>
+
+                <button type="submit" class="btn btn-accent">Save</button>
+                <a asp-action="Index" class="btn btn-outline-secondary ms-2">Cancel</a>
+            </form>
+        </section>
+    </div>
+    <div class="col-lg-6">
+        <section class="panel">
+            <h2 class="h5">Who does what</h2>
+            <dl class="mb-0 small">
+                <dt>Administrator</dt><dd>Full access, manages users and reference data.</dd>
+                <dt>ReleaseManager</dt><dd>Accepts release records, coordinates readiness, marks ready, closes.</dd>
+                <dt>TechnicalOwner</dt><dd>Technical validation after deployment, stabilization.</dd>
+                <dt>ProductOwner</dt><dd>Creates and submits release records, business validation.</dd>
+                <dt>QA / InfoSec / Risk / ChapterLead / DBA / ITOperations</dt><dd>Own the matching readiness controls.</dd>
+                <dt>DevOps</dt><dd>Runs deployments and rollbacks.</dd>
+                <dt>Auditor</dt><dd>Read-only access to records, history and KPI.</dd>
+            </dl>
+        </section>
+    </div>
+</div>

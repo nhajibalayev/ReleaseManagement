@@ -1,28 +1,39 @@
-@model IEnumerable<dynamic>
+@using ReleaseManagement.Web.Controllers.Admin
+@model IReadOnlyList<UserRowViewModel>
 @{
     ViewData["Title"] = "Users";
 }
 
 <div class="mb-3">
     <h1 class="h3 mb-1">Users</h1>
-    <p class="text-muted mb-0">Identity, role, and account status overview.</p>
+    <p class="text-muted mb-0">Identity, role, and account status. New AD users get the default role on first sign-in; assign the rest here.</p>
 </div>
 <section class="panel">
     <div class="table-responsive">
         <table class="table align-middle mb-0">
-            <thead><tr><th>User name</th><th>Full name</th><th>Email</th><th>Roles</th><th>Status</th></tr></thead>
+            <thead><tr><th>User name</th><th>Full name</th><th>Email</th><th>Roles</th><th>Status</th><th></th></tr></thead>
             <tbody>
-            @foreach (dynamic user in Model)
+            @foreach (var user in Model)
             {
                 <tr>
                     <td class="fw-semibold">@user.UserName</td>
                     <td>@user.FullName</td>
-                    <td><a href="mailto:@user.Email">@user.Email</a></td>
-                    <td>@(string.IsNullOrWhiteSpace((string?)user.Roles) ? "—" : user.Roles)</td>
-                    <td><span class="status-badge @((bool)user.IsActive ? "ok" : "danger")">@((bool)user.IsActive ? "Active" : "Inactive")</span></td>
+                    <td>@if (!string.IsNullOrWhiteSpace(user.Email)) { <a href="mailto:@user.Email">@user.Email</a> } else { <span>—</span> }</td>
+                    <td>
+                        @if (user.Roles.Count == 0)
+                        {
+                            <span class="text-muted">—</span>
+                        }
+                        @foreach (var role in user.Roles)
+                        {
+                            <span class="badge text-bg-light border me-1">@role</span>
+                        }
+                    </td>
+                    <td><span class="status-badge @(user.IsActive ? "ok" : "danger")">@(user.IsActive ? "Active" : "Inactive")</span></td>
+                    <td class="text-end"><a class="btn btn-sm btn-outline-secondary" asp-action="Edit" asp-route-id="@user.Id">Edit roles</a></td>
                 </tr>
             }
-            @if (!Model.Any()) { <tr><td colspan="5" class="text-center text-muted py-4">No users found.</td></tr> }
+            @if (Model.Count == 0) { <tr><td colspan="6" class="text-center text-muted py-4">No users found.</td></tr> }
             </tbody>
         </table>
     </div>

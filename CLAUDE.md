@@ -99,7 +99,7 @@ How roles work:
 - Stored in Identity (`AspNetRoles` / `AspNetUserRoles`).
 - System does **not** infer RM/InfoSec from AD group or job title.
 - First AD login provisions user with `WindowsAuth:DefaultRole` (usually `ProductOwner`).
-- Admin **Users** screen is **read-only** (lists users + roles). **No UI to assign roles yet.**
+- Admin **Users** screen: list + **Edit roles** (`UsersController.Edit`, checkboxes for all `RoleNames`, IsActive toggle, audit `UserRolesChanged`; cannot strip Administrator / deactivate yourself). Added 2026-09-30.
 - Demo seed users (when `Seed:Enabled`): `admin`, `po`, `rm`, `qa`, `infosec`, `risk`, `chapterlead`, `pentest`, `business`, `devops`, `auditor` — password `ChangeMe!123`.
 
 Workflow checks `CurrentUser.IsInRole(...)`. Status has `CurrentResponsibleRole`.
@@ -178,7 +178,7 @@ Screens added: `Forecasts`, `Freezes`, `Reviews`, `Reports` (KPI), `Releases/Com
 
 ### Explicitly missing / weak
 
-- No admin UI to assign roles or manage users deeply
+- Users admin: roles + active flag only (no create/delete user, no password reset)
 - Track is fixed to Application (Infrastructure intake via Service Desk was explicitly descoped)
 - Incident / Service Desk Change IDs are manual references (no Service Desk integration)
 - Retention ≥ 5 years is a governance policy, not enforced by the platform
