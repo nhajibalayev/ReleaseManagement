@@ -1,0 +1,12 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  Corporate NuGet mirror. Copy this file to NuGet.Config (same folder) and put the
+  real address in "value". NuGet.Config is git-ignored; the Dockerfile picks it up
+  automatically so `dotnet restore` inside the image uses the mirror instead of nuget.org.
+-->
+<configuration>
+  <packageSources>
+    <clear />
+    <add key="corp" value="https://nexus.example.local/repository/nuget-group/index.json" />
+  </packageSources>
+</configuration>

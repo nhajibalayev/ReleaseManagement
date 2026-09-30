@@ -494,3 +494,4 @@ build-verify.cmd
 build-and-push.cmd
 certs/*
 !certs/README.md
+NuGet.Config

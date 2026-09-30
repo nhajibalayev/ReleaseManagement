@@ -11,7 +11,8 @@ RUN if ls /tmp/certs/*.crt >/dev/null 2>&1; then \
     fi
 
 # Restore first so NuGet packages are cached between builds.
-COPY Directory.Build.props ./
+# NuGet.Config is optional: create it from NuGet.Config.example to use a corporate NuGet mirror.
+COPY Directory.Build.props NuGet.Config* ./
 COPY src/ReleaseManagement.Domain/ReleaseManagement.Domain.csproj                 src/ReleaseManagement.Domain/
 COPY src/ReleaseManagement.Application/ReleaseManagement.Application.csproj       src/ReleaseManagement.Application/
 COPY src/ReleaseManagement.Infrastructure/ReleaseManagement.Infrastructure.csproj src/ReleaseManagement.Infrastructure/
