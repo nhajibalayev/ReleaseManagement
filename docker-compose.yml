@@ -1,0 +1,45 @@
+# Local run on Docker Desktop against a remote PostgreSQL.
+#   1. copy .env.example -> .env and fill in real values (never commit .env)
+#   2. docker compose up --build
+#   3. open http://localhost:8080
+services:
+  web:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    image: releasemanagement-web:local
+    ports:
+      - "${WEB_PORT:-8080}:8080"
+    environment:
+      ASPNETCORE_ENVIRONMENT: ${ASPNETCORE_ENVIRONMENT:-Production}
+      ConnectionStrings__DefaultConnection: "Host=${DB_HOST};Port=${DB_PORT:-5432};Database=${DB_NAME};Username=${DB_USER};Password=${DB_PASSWORD}"
+      WindowsAuth__Enabled: ${AD_ENABLED:-true}
+      WindowsAuth__Mode: ${AD_MODE:-Real}
+      WindowsAuth__Domain: ${AD_DOMAIN}
+      WindowsAuth__LdapServer: ${AD_LDAP_SERVER}
+      WindowsAuth__LdapPort: ${AD_LDAP_PORT:-0}
+      WindowsAuth__LdapUseSsl: ${AD_LDAP_USE_SSL:-false}
+      WindowsAuth__LdapSkipCertificateValidation: ${AD_LDAP_SKIP_CERT_VALIDATION:-false}
+      WindowsAuth__AllowLocalLogin: ${AD_ALLOW_LOCAL_LOGIN:-false}
+      WindowsAuth__DefaultRole: ${AD_DEFAULT_ROLE:-ProductOwner}
+      AzureDevOps__Enabled: ${ADO_ENABLED:-true}
+      AzureDevOps__Mode: ${ADO_MODE:-Real}
+      AzureDevOps__OrganizationUrl: ${ADO_ORG_URL}
+      AzureDevOps__Project: ${ADO_PROJECT}
+      AzureDevOps__WorkItemType: ${ADO_WORK_ITEM_TYPE:-Release}
+      AzureDevOps__ApiVersion: ${ADO_API_VERSION:-6.0}
+      AzureDevOps__RequireProjectAccessToCreate: ${ADO_REQUIRE_PROJECT_ACCESS:-true}
+      AzureDevOps__CreateWorkItemOnSubmit: ${ADO_CREATE_WORK_ITEM_ON_SUBMIT:-false}
+      Hangfire__Enabled: "false"
+      Seed__Enabled: ${SEED_ENABLED:-false}
+      DemoMode: ${DEMO_MODE:-false}
+    volumes:
+      - attachments:/app/App_Data/attachments
+      - logs:/app/logs
+      - dpkeys:/root/.aspnet/DataProtection-Keys
+    restart: unless-stopped
+
+volumes:
+  attachments:
+  logs:
+  dpkeys:

@@ -488,3 +488,7 @@ _to_delete/
 build.log
 build-check.cmd
 run-app.cmd
+git-push.cmd
+push.log
+build-verify.cmd
+build-and-push.cmd

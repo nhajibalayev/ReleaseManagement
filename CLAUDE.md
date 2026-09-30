@@ -289,3 +289,14 @@ update `ReleaseWorkflowRules` + `ReleaseReadinessRules` + tests + `ReleaseStatus
 - [ ] Project name = spaces, not `%20`
 - [ ] Latest change = Procedure v4.0 alignment (readiness model, forecast, freeze, PIR, KPI, CBAR pack)
 - [ ] Mock mode for ADO/AD is configured in appsettings.Development.json
+
+---
+
+## 14. Docker / Linux (added 2026-09-30)
+
+- `Dockerfile` (multi-stage, aspnet:10.0 + libldap), `.dockerignore`, `docker-compose.yml`, `.env.example`, `docs/DOCKER.md` (Russian runbook).
+- Config in containers = env vars `Section__Key`; secrets only in `.env` (git-ignored).
+- **AD login on Linux**: `System.DirectoryServices.AccountManagement` is Windows-only, so `DependencyInjection` selects `Identity/LdapActiveDirectoryAuthenticator.cs` when `!OperatingSystem.IsWindows()` or `WindowsAuth:LdapServer` is set. LDAP simple bind + sAMAccountName search; emits the same `ad:{SID}` ExternalId. New options: `LdapServer`, `LdapPort`, `LdapUseSsl`, `LdapSkipCertificateValidation`, `LdapBaseDn`. Package: `System.DirectoryServices.Protocols` 10.0.10.
+- NTLM to DevOps Server (`AzureDevOpsAuthHandler`) works on Linux unchanged.
+- Container does NOT run migrations; apply with `dotnet ef database update --connection ...`.
+- Not compiled by the agent (no SDK in its sandbox) — first `dotnet build` on a dev machine validates `LdapActiveDirectoryAuthenticator.cs`.

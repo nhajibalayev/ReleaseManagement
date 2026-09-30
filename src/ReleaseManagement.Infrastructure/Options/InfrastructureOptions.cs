@@ -35,6 +35,26 @@ public sealed class WindowsAuthOptions
 
     public string MockPassword { get; set; } = "Mock!123";
 
+    /// <summary>
+    /// LDAP host of a domain controller (e.g. dc01.nh-nk.az). Required on Linux containers
+    /// (Docker / Kubernetes) where System.DirectoryServices.AccountManagement is unavailable;
+    /// when empty, <see cref="Domain"/> is used as the host name.
+    /// Setting it on Windows also forces the LDAP path.
+    /// </summary>
+    public string LdapServer { get; set; } = string.Empty;
+
+    /// <summary>LDAP port. 0 = 389 (or 636 when <see cref="LdapUseSsl"/> is true).</summary>
+    public int LdapPort { get; set; }
+
+    /// <summary>Use LDAPS. Recommended: simple bind sends the password in clear text over plain LDAP.</summary>
+    public bool LdapUseSsl { get; set; }
+
+    /// <summary>Accept any server certificate over LDAPS (corporate CA not trusted in the container).</summary>
+    public bool LdapSkipCertificateValidation { get; set; }
+
+    /// <summary>Search base (e.g. DC=nh-nk,DC=az). Empty = read defaultNamingContext from RootDSE.</summary>
+    public string LdapBaseDn { get; set; } = string.Empty;
+
     public bool IsMock => string.Equals(Mode, "Mock", StringComparison.OrdinalIgnoreCase);
 }
 

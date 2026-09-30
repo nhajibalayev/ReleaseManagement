@@ -139,6 +139,12 @@ public static class DependencyInjection
         {
             services.AddScoped<IActiveDirectoryAuthenticator, MockActiveDirectoryAuthenticator>();
         }
+        else if (!OperatingSystem.IsWindows() || !string.IsNullOrWhiteSpace(windowsAuth.LdapServer))
+        {
+            // Linux containers (Docker / Kubernetes): System.DirectoryServices.AccountManagement is
+            // Windows-only, so authenticate against the domain controller over LDAP instead.
+            services.AddScoped<IActiveDirectoryAuthenticator, LdapActiveDirectoryAuthenticator>();
+        }
         else
         {
             services.AddScoped<IActiveDirectoryAuthenticator, ActiveDirectoryAuthenticator>();
