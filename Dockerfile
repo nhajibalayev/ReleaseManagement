@@ -4,6 +4,12 @@
 FROM mcr.microsoft.com/dotnet/sdk:10.0 AS build
 WORKDIR /src
 
+# Corporate SSL inspection: trust the CA certificates from ./certs (*.crt, PEM) if any.
+COPY certs/ /tmp/certs/
+RUN if ls /tmp/certs/*.crt >/dev/null 2>&1; then \
+      cp /tmp/certs/*.crt /usr/local/share/ca-certificates/ && update-ca-certificates; \
+    fi
+
 # Restore first so NuGet packages are cached between builds.
 COPY Directory.Build.props ./
 COPY src/ReleaseManagement.Domain/ReleaseManagement.Domain.csproj                 src/ReleaseManagement.Domain/
@@ -25,6 +31,13 @@ WORKDIR /app
 RUN apt-get update \
     && (apt-get install -y --no-install-recommends libldap2 || apt-get install -y --no-install-recommends libldap-2.5-0) \
     && rm -rf /var/lib/apt/lists/*
+
+# Same corporate CA certificates for runtime (LDAPS, DevOps Server, PostgreSQL over TLS).
+COPY certs/ /tmp/certs/
+RUN if ls /tmp/certs/*.crt >/dev/null 2>&1; then \
+      cp /tmp/certs/*.crt /usr/local/share/ca-certificates/ && update-ca-certificates; \
+    fi \
+    && rm -rf /tmp/certs
 
 COPY --from=build /app/publish .
 

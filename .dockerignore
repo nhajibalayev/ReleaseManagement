@@ -10,6 +10,7 @@
 tests/
 docs/
 *.md
+!certs/
 *.cmd
 *.log
 .env
