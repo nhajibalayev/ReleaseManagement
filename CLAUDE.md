@@ -300,3 +300,10 @@ update `ReleaseWorkflowRules` + `ReleaseReadinessRules` + tests + `ReleaseStatus
 - NTLM to DevOps Server (`AzureDevOpsAuthHandler`) works on Linux unchanged.
 - Container does NOT run migrations; apply with `dotnet ef database update --connection ...`.
 - Not compiled by the agent (no SDK in its sandbox) — first `dotnet build` on a dev machine validates `LdapActiveDirectoryAuthenticator.cs`.
+
+## 15. Secrets contract & Vault (added 2026-10-01)
+
+- `Web/Secrets/SecretKeys.cs` = the single list of external config keys (Vault vs ConfigMap, required flag). `AppSecrets` = typed validated snapshot (singleton). `SecretsLoader.AddAppSecrets()` validates for the active mode and logs origin per key.
+- `Web/Secrets/CorporateVault.cs`: `PL.Common.SecretVault` → `AddVaultWithKubernetes(builder.Configuration)`, compiled only with `-p:CorpVault=true` (`CORP_VAULT` build arg) because the package is internal-only. Skipped in Development.
+- `appsettings.json` has a `Vault` section placeholder (Address/Role/SecretPath) — key names unverified against the library.
+- Table for DevOps: `docs/CONFIGURATION.md`. Existing consumers (`AddInfrastructure`, Options) still read `IConfiguration` directly; `AppSecrets` is the validation gate + documented contract, not yet injected everywhere.

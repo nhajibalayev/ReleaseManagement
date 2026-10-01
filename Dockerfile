@@ -4,6 +4,9 @@
 FROM mcr.microsoft.com/dotnet/sdk:10.0 AS build
 WORKDIR /src
 
+# CORP_VAULT=true compiles in PL.Common.SecretVault (needs NuGet.Config pointing at the corporate mirror).
+ARG CORP_VAULT=false
+
 # Corporate SSL inspection: trust the CA certificates from ./certs (*.crt, PEM) if any.
 COPY certs/ /tmp/certs/
 RUN if ls /tmp/certs/*.crt >/dev/null 2>&1; then \
@@ -17,11 +20,11 @@ COPY src/ReleaseManagement.Domain/ReleaseManagement.Domain.csproj               
 COPY src/ReleaseManagement.Application/ReleaseManagement.Application.csproj       src/ReleaseManagement.Application/
 COPY src/ReleaseManagement.Infrastructure/ReleaseManagement.Infrastructure.csproj src/ReleaseManagement.Infrastructure/
 COPY src/ReleaseManagement.Web/ReleaseManagement.Web.csproj                       src/ReleaseManagement.Web/
-RUN dotnet restore src/ReleaseManagement.Web/ReleaseManagement.Web.csproj
+RUN dotnet restore src/ReleaseManagement.Web/ReleaseManagement.Web.csproj -p:CorpVault=$CORP_VAULT
 
 COPY src/ src/
 RUN dotnet publish src/ReleaseManagement.Web/ReleaseManagement.Web.csproj \
-    -c Release -o /app/publish --no-restore
+    -c Release -o /app/publish --no-restore -p:CorpVault=$CORP_VAULT
 
 # ---------- runtime ----------
 FROM mcr.microsoft.com/dotnet/aspnet:10.0 AS runtime

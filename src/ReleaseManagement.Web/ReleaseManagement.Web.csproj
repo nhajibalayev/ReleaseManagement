@@ -17,6 +17,17 @@
     <PackageReference Include="Serilog.AspNetCore" Version="10.0.0" />
   </ItemGroup>
 
+  <!-- Corporate HashiCorp Vault client (internal NuGet only). Enable with: dotnet build -p:CorpVault=true -->
+  <PropertyGroup>
+    <CorpVault Condition="'$(CorpVault)' == ''">false</CorpVault>
+  </PropertyGroup>
+  <PropertyGroup Condition="'$(CorpVault)' == 'true'">
+    <DefineConstants>$(DefineConstants);CORP_VAULT</DefineConstants>
+  </PropertyGroup>
+  <ItemGroup Condition="'$(CorpVault)' == 'true'">
+    <PackageReference Include="PL.Common.SecretVault" Version="1.0.1" />
+  </ItemGroup>
+
   <PropertyGroup>
     <TargetFramework>net10.0</TargetFramework>
     <Nullable>enable</Nullable>

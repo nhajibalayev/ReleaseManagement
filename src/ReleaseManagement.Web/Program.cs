@@ -1,6 +1,7 @@
 using Hangfire;
 using ReleaseManagement.Infrastructure;
 using ReleaseManagement.Infrastructure.Persistence;
+using ReleaseManagement.Web.Secrets;
 using Serilog;
 
 Log.Logger = new LoggerConfiguration()
@@ -10,6 +11,11 @@ Log.Logger = new LoggerConfiguration()
 try
 {
     var builder = WebApplication.CreateBuilder(args);
+
+    // 1. Vault (production only; no-op locally) adds its secrets to builder.Configuration.
+    // 2. SecretsLoader validates every key from Secrets/SecretKeys.cs and logs where each came from.
+    builder.AddCorporateVault();
+    builder.AddAppSecrets();
 
     builder.Host.UseSerilog((context, services, configuration) => configuration
         .ReadFrom.Configuration(context.Configuration)
