@@ -1,3 +1,5 @@
+using System.ComponentModel.DataAnnotations;
+
 namespace ReleaseManagement.Domain.Enums;
 
 /// <summary>Procedure v4.0 §1.2 — release direction. Only Application is used today.</summary>
@@ -18,16 +20,26 @@ public enum ReleaseCategory
 /// <summary>Procedure v4.0 §4.2 / §6.2 — execution mode.</summary>
 public enum ExecutionMode
 {
+    [Display(Name = "Planned")]
     Planned = 1,
+
+    [Display(Name = "Expedited (urgent, outside the plan)")]
     Expedited = 2
 }
 
 /// <summary>Procedure v4.0 §5.3 — recovery approach by category.</summary>
 public enum RecoveryApproach
 {
+    [Display(Name = "Standard pipeline rollback")]
     StandardPipelineRollback = 1,
+
+    [Display(Name = "Rollback / backout")]
     RollbackOrBackout = 2,
+
+    [Display(Name = "Roll forward (fix forward)")]
     RollForward = 3,
+
+    [Display(Name = "Formal recovery plan")]
     FormalRecoveryPlan = 4
 }
 

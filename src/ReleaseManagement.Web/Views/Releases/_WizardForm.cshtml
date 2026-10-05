@@ -40,7 +40,7 @@
 <div class="wizard-steps" aria-label="Release wizard progress">
     @for (var index = 0; index < stepNames.Length; index++)
     {
-        <span class="wizard-step @(Model.Step == index + 1 ? "active" : "")">@(index + 1). @stepNames[index]</span>
+        <span class="wizard-step @(Model.Step == index + 1 ? "active" : index + 1 < Model.Step ? "done" : "")">@(index + 1). @stepNames[index]</span>
     }
 </div>
 
@@ -63,10 +63,10 @@
 
     <section class="panel @(Model.Step == 1 ? "" : "d-none")">
         <h2 class="h5">General information &amp; planned window</h2>
-        <p class="text-muted">Track: <strong>Application</strong> (Azure Boards + SDLC). Infrastructure changes come from Service Desk and are out of scope today.</p>
+        <p class="section-hint">Track: <strong>Application</strong> (Azure Boards + SDLC). Infrastructure changes come from Service Desk and are out of scope today.</p>
         <div class="row g-3">
             <div class="col-md-8">
-                <label asp-for="Title" class="form-label"></label>
+                <label asp-for="Title" class="form-label required"></label>
                 <input asp-for="Title" class="form-control" />
                 <span asp-validation-for="Title" class="text-danger small"></span>
             </div>
@@ -75,36 +75,36 @@
                 <input asp-for="ReleaseVersion" class="form-control" />
             </div>
             <div class="col-12">
-                <label asp-for="Description" class="form-label"></label>
-                <textarea asp-for="Description" class="form-control" rows="4"></textarea>
+                <label asp-for="Description" class="form-label required"></label>
+                <textarea asp-for="Description" class="form-control" rows="3" placeholder="What is being released and why"></textarea>
                 <span asp-validation-for="Description" class="text-danger small"></span>
             </div>
             <div class="col-md-6">
-                <label asp-for="ProductId" class="form-label"></label>
+                <label asp-for="ProductId" class="form-label required"></label>
                 <select asp-for="ProductId" class="form-select" asp-items="@(new SelectList(Model.Products, "Id", "Name"))">
                     <option value="">Select a product</option>
                 </select>
             </div>
             <div class="col-md-6">
-                <label asp-for="EnvironmentId" class="form-label"></label>
+                <label asp-for="EnvironmentId" class="form-label required"></label>
                 <select asp-for="EnvironmentId" class="form-select" asp-items="@(new SelectList(Model.Environments, "Id", "Name"))">
                     <option value="">Select an environment</option>
                 </select>
             </div>
             <div class="col-md-4">
-                <label asp-for="PlannedWindowStart" class="form-label"></label>
+                <label asp-for="PlannedWindowStart" class="form-label required"></label>
                 <input asp-for="PlannedWindowStart" type="datetime-local" class="form-control" />
                 <span asp-validation-for="PlannedWindowStart" class="text-danger small"></span>
             </div>
             <div class="col-md-4">
-                <label asp-for="PlannedWindowEnd" class="form-label"></label>
+                <label asp-for="PlannedWindowEnd" class="form-label required"></label>
                 <input asp-for="PlannedWindowEnd" type="datetime-local" class="form-control" />
                 <span asp-validation-for="PlannedWindowEnd" class="text-danger small"></span>
             </div>
             <div class="col-md-4">
                 <label asp-for="TechnicalOwnerUserId" class="form-label"></label>
                 <select asp-for="TechnicalOwnerUserId" class="form-select" asp-items="@(new SelectList(Model.TechnicalOwners, "Id", "Name"))">
-                    <option value="">Assigned by Release Manager</option>
+                    <option value="">— leave for the Release Manager —</option>
                 </select>
             </div>
             <div class="col-md-4">
@@ -115,14 +115,15 @@
             </div>
             <div class="col-md-8">
                 <label asp-for="MaintenanceApprovalReference" class="form-label"></label>
-                <input asp-for="MaintenanceApprovalReference" class="form-control" placeholder="Approved maintenance window reference (§6.1)" />
+                <input asp-for="MaintenanceApprovalReference" class="form-control" placeholder="Reference of the approved maintenance window" />
+                <div class="form-text">Only when the release runs inside an approved maintenance window (§6.1).</div>
             </div>
             <div class="col-md-6">
                 <label asp-for="ForecastId" class="form-label"></label>
                 <select asp-for="ForecastId" class="form-select" asp-items="@(new SelectList(Model.Forecasts, "Id", "Name"))">
                     <option value="">Not in the quarterly forecast</option>
                 </select>
-                <div class="form-text">Major planned releases must be listed in the quarterly forecast (§3.1).</div>
+                <div class="form-text">Required for Major planned releases (§3.1); optional otherwise.</div>
             </div>
             <div class="col-md-6">
                 <label asp-for="KeyDependencies" class="form-label"></label>
@@ -201,7 +202,7 @@
     </section>
 
     <section class="panel @(Model.Step == 3 ? "" : "d-none")">
-        <h2 class="h5">Classification (§4.1) and execution mode (§4.2)</h2>
+        <h2 class="h5">Classification and execution mode <span class="ref">§4.1, §4.2</span></h2>
         <p class="text-muted">Any significant Major criterion makes the whole release Major; otherwise Normal impact makes it Normal; otherwise Minor. Database changes and planned downtime raise the release to at least Normal.</p>
         <div class="row g-4">
             <div class="col-lg-6">
@@ -227,7 +228,7 @@
                 </div>
             </div>
             <div class="col-lg-6">
-                <h3 class="h6">Security assessment triggers (§5.2)</h3>
+                <h3 class="h6">Security assessment triggers <span class="ref">§5.2</span></h3>
                 @foreach (var trigger in securityTriggers)
                 {
                     <div class="form-check">
@@ -253,7 +254,7 @@
     <section class="panel @(Model.Step == 4 ? "" : "d-none")">
         <div class="d-flex justify-content-between align-items-center mb-3">
             <div>
-                <h2 class="h5 mb-1">Source links (§1.3, §8.1)</h2>
+                <h2 class="h5 mb-1">Source links <span class="ref">§1.3, §8.1</span></h2>
                 <p class="text-muted mb-0">Link the authoritative sources — Azure Boards work item / PR / pipeline / artifact, Service Desk Change. Evidence stays in the source system; the record only references it. At least one source reference is required.</p>
             </div>
             <button type="button" class="btn btn-outline-secondary" id="add-reference-row">Add link</button>
@@ -287,11 +288,12 @@
     </section>
 
     <section class="panel @(Model.Step == 5 ? "" : "d-none")">
-        <h2 class="h5">Readiness plans (§5) and recovery (§5.3)</h2>
+        <h2 class="h5">Readiness plans and recovery <span class="ref">§5, §5.3</span></h2>
+        <p class="section-hint">Keep it short — the evidence itself lives behind the links on the previous step. Fields marked <em>(Major)</em> are required only for Major releases.</p>
         <div class="row g-3">
             <div class="col-12">
                 <label asp-for="TestingSummary" class="form-label"></label>
-                <textarea asp-for="TestingSummary" class="form-control" rows="4" placeholder="Summarize test scope and results; link the QA evidence on the previous step."></textarea>
+                <textarea asp-for="TestingSummary" class="form-control" rows="2" placeholder="Test scope and results in two or three sentences"></textarea>
             </div>
             <div class="col-md-4">
                 <label asp-for="RecoveryApproach" class="form-label"></label>
@@ -300,24 +302,28 @@
             </div>
             <div class="col-md-8">
                 <label asp-for="RollbackPlan" class="form-label">Rollback / backout or roll-forward description</label>
-                <textarea asp-for="RollbackPlan" class="form-control" rows="3"></textarea>
+                <textarea asp-for="RollbackPlan" class="form-control" rows="2" placeholder="How do we get back to the previous version?"></textarea>
             </div>
             <div class="col-md-6">
                 <label asp-for="RecoveryDecisionPoints" class="form-label"></label>
-                <textarea asp-for="RecoveryDecisionPoints" class="form-control" rows="3" placeholder="When do we decide to roll back? Who decides? (mandatory for Major)"></textarea>
+                <textarea asp-for="RecoveryDecisionPoints" class="form-control" rows="2" placeholder="When do we decide to roll back, and who decides?"></textarea>
             </div>
             <div class="col-md-6">
                 <label asp-for="RecoveryResponsibleParties" class="form-label"></label>
-                <textarea asp-for="RecoveryResponsibleParties" class="form-control" rows="3" placeholder="Responsible parties for recovery (mandatory for Major)"></textarea>
+                <textarea asp-for="RecoveryResponsibleParties" class="form-control" rows="2" placeholder="Who executes the recovery"></textarea>
             </div>
-            <div class="col-md-6"><label asp-for="DeploymentPlan" class="form-label"></label><textarea asp-for="DeploymentPlan" class="form-control" rows="3"></textarea></div>
-            <div class="col-md-6"><label asp-for="MonitoringPlan" class="form-label"></label><textarea asp-for="MonitoringPlan" class="form-control" rows="3"></textarea></div>
-            <div class="col-md-6"><label asp-for="PostReleaseValidationPlan" class="form-label"></label><textarea asp-for="PostReleaseValidationPlan" class="form-control" rows="3"></textarea></div>
-            <div class="col-md-3">
-                <div class="form-check mt-4"><input asp-for="DowntimeRequired" class="form-check-input" id="downtime-required" /><label asp-for="DowntimeRequired" class="form-check-label"></label></div>
+            <div class="col-md-6"><label asp-for="DeploymentPlan" class="form-label"></label><textarea asp-for="DeploymentPlan" class="form-control" rows="2" placeholder="Steps, order, who runs the pipeline"></textarea></div>
+            <div class="col-md-6"><label asp-for="MonitoringPlan" class="form-label"></label><textarea asp-for="MonitoringPlan" class="form-control" rows="2" placeholder="What is watched after go-live and for how long"></textarea></div>
+            <div class="col-md-6"><label asp-for="PostReleaseValidationPlan" class="form-label"></label><textarea asp-for="PostReleaseValidationPlan" class="form-control" rows="2" placeholder="How we confirm the release works (smoke tests, business check)"></textarea></div>
+            <div class="col-md-6">
+                <label class="form-label">Downtime &amp; operations</label>
+                <div class="form-check"><input asp-for="DowntimeRequired" class="form-check-input" id="downtime-required" /><label asp-for="DowntimeRequired" class="form-check-label"></label></div>
+                <div class="d-flex align-items-center gap-2 mt-1 mb-2 ps-4">
+                    <label asp-for="ExpectedDowntimeMinutes" class="form-label mb-0 small fw-normal"></label>
+                    <input asp-for="ExpectedDowntimeMinutes" class="form-control form-control-sm" min="0" style="max-width: 7rem" />
+                </div>
                 <div class="form-check"><input asp-for="OperationalImpact" class="form-check-input" /><label asp-for="OperationalImpact" class="form-check-label"></label></div>
             </div>
-            <div class="col-md-3"><label asp-for="ExpectedDowntimeMinutes" class="form-label"></label><input asp-for="ExpectedDowntimeMinutes" class="form-control" min="0" /></div>
         </div>
     </section>
 
@@ -327,8 +333,8 @@
             <div><dt>Title</dt><dd>@Model.Title</dd></div>
             <div><dt>Version</dt><dd>@(Model.ReleaseVersion ?? "—")</dd></div>
             <div><dt>Planned window</dt><dd>@Model.PlannedWindowStart.ToString("g") – @Model.PlannedWindowEnd.ToString("g")</dd></div>
-            <div><dt>Track / category / mode</dt><dd>Application / <strong>@Model.PreviewCategory</strong> / @Model.ExecutionMode</dd></div>
-            <div><dt>Recovery approach</dt><dd>@Model.RecoveryApproach</dd></div>
+            <div><dt>Track / category / mode</dt><dd>Application / <strong>@Model.PreviewCategory</strong> / @EnumDisplay.Name(Model.ExecutionMode)</dd></div>
+            <div><dt>Recovery approach</dt><dd>@EnumDisplay.Name(Model.RecoveryApproach)</dd></div>
             <div><dt>Services</dt><dd>@Model.Services.Count(service => service.ServiceId != Guid.Empty)</dd></div>
             <div><dt>Source links</dt><dd>@Model.References.Count(reference => !string.IsNullOrWhiteSpace(reference.ExternalId))</dd></div>
             <div><dt>Planned maintenance</dt><dd>@(Model.PlannedMaintenance ? "Yes" : "No")</dd></div>
@@ -339,8 +345,11 @@
         <p class="mb-0" style="white-space: pre-wrap">@Model.Description</p>
     </section>
 
-    <div class="d-flex gap-2 justify-content-between">
-        <button type="submit" name="action" value="save" class="btn btn-outline-secondary">Save Draft</button>
+    <div class="wizard-footer">
+        <div class="d-flex align-items-center gap-3">
+            <button type="submit" name="action" value="save" class="btn btn-outline-secondary">Save draft</button>
+            <span class="footer-hint d-none d-md-inline">Step @Model.Step of 6 · a draft can be saved at any step</span>
+        </div>
         <div class="d-flex gap-2">
             @if (Model.Step > 1)
             {
