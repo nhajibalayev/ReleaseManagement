@@ -45,6 +45,11 @@ a { color: var(--rm-accent); }
   position: sticky;
   top: 0;
   height: 100vh;
+  box-sizing: border-box;
+  overflow-y: auto;          /* menu is taller than the viewport: scroll inside the sidebar */
+  overscroll-behavior: contain;
+  scrollbar-width: thin;
+  scrollbar-color: rgba(215, 232, 234, 0.35) transparent;
 }
 
 .brand {
