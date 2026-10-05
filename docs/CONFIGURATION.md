@@ -15,6 +15,7 @@ is written to the log — values are never logged.
 | `WindowsAuth:Domain` | `WindowsAuth__Domain` | ConfigMap | no | AD DNS domain, e.g. `test-namiq.local` |
 | `WindowsAuth:LdapServer` | `WindowsAuth__LdapServer` | ConfigMap | Linux + Real | Domain controller FQDN, e.g. `mcpads01.test-namiq.local` |
 | `WindowsAuth:NetbiosDomain` | `WindowsAuth__NetbiosDomain` | ConfigMap | recommended | Short domain for NTLM to DevOps Server, e.g. `TEST-NAMIQ` (`echo %USERDOMAIN%`) |
+| `AzureDevOps:AuthScheme` | `AzureDevOps__AuthScheme` | ConfigMap | optional | `NTLM` (default, works from Linux), `Negotiate` (needs Kerberos), `Auto` (let .NET choose) |
 | `WindowsAuth:LdapUseSsl` | `WindowsAuth__LdapUseSsl` | ConfigMap | no | `true` = LDAPS 636 (recommended) |
 | `WindowsAuth:DefaultRole` | `WindowsAuth__DefaultRole` | ConfigMap | no | Role on first sign-in, default `ProductOwner` |
 | `AzureDevOps:Enabled` | `AzureDevOps__Enabled` | ConfigMap | no | `true` = integrate with DevOps Server |

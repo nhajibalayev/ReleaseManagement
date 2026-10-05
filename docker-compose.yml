@@ -31,6 +31,8 @@ services:
       AzureDevOps__Project: ${ADO_PROJECT}
       AzureDevOps__WorkItemType: ${ADO_WORK_ITEM_TYPE:-Release}
       AzureDevOps__ApiVersion: ${ADO_API_VERSION:-6.0}
+      # NTLM (default) | Negotiate | Auto — scheme used with the signed-in AD user against DevOps Server
+      AzureDevOps__AuthScheme: ${ADO_AUTH_SCHEME:-NTLM}
       AzureDevOps__RequireProjectAccessToCreate: ${ADO_REQUIRE_PROJECT_ACCESS:-true}
       AzureDevOps__CreateWorkItemOnSubmit: ${ADO_CREATE_WORK_ITEM_ON_SUBMIT:-false}
       Hangfire__Enabled: "false"

@@ -70,13 +70,30 @@ public sealed class AzureDevOpsAuthHandler : HttpMessageHandler
         if (credential is not null)
         {
             var networkCredential = credential.ToNetworkCredential();
-            handler.Credentials = networkCredential;
+            var scheme = string.IsNullOrWhiteSpace(_options.AuthScheme) ? "NTLM" : _options.AuthScheme.Trim();
+
+            if (scheme.Equals("Auto", StringComparison.OrdinalIgnoreCase))
+            {
+                // Let .NET pick (prefers Negotiate; on Linux that needs Kerberos/GSSAPI).
+                handler.Credentials = networkCredential;
+            }
+            else
+            {
+                // Pin the scheme so .NET answers the NTLM challenge instead of Negotiate,
+                // which on Linux has no Kerberos ticket and fails silently with a 401.
+                var cache = new CredentialCache();
+                cache.Add(new Uri(_options.OrganizationUrl.TrimEnd('/') + "/"), scheme, networkCredential);
+                handler.Credentials = cache;
+            }
+
             handler.PreAuthenticate = true;
-            _logger.LogDebug(
-                "Azure DevOps NTLM as domain='{Domain}' user='{User}' (managed NTLM: {Managed})",
+            _logger.LogInformation(
+                "Azure DevOps auth: scheme={Scheme} domain='{Domain}' user='{User}' managedNtlm={Managed} url={Url}",
+                scheme,
                 networkCredential.Domain,
                 networkCredential.UserName,
-                AppContext.TryGetSwitch("System.Net.Security.UseManagedNtlm", out var managed) ? managed : (bool?)null);
+                AppContext.TryGetSwitch("System.Net.Security.UseManagedNtlm", out var managed) ? managed : (bool?)null,
+                request.RequestUri);
         }
         else if (_options.UseWindowsCredentials)
         {
@@ -85,9 +102,16 @@ public sealed class AzureDevOpsAuthHandler : HttpMessageHandler
         }
         else if (!string.IsNullOrWhiteSpace(_options.PersonalAccessToken))
         {
+            _logger.LogInformation("Azure DevOps auth: PAT (no AD credentials in session).");
             var basic = Convert.ToBase64String(
                 Encoding.ASCII.GetBytes($":{_options.PersonalAccessToken}"));
             request.Headers.Authorization = new AuthenticationHeaderValue("Basic", basic);
+        }
+
+        else
+        {
+            _logger.LogWarning(
+                "Azure DevOps auth: no credentials. The signed-in user has no AD credentials in session (local login?) and no PAT is configured; request will be anonymous.");
         }
 
         // Buffer the response so the per-request handler can be disposed safely.

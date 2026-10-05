@@ -110,6 +110,12 @@ public sealed class AzureDevOpsOptions
 
     public string WorkItemType { get; set; } = "Release";
 
+    /// <summary>
+    /// HTTP auth scheme used with the signed-in user's AD credentials against Azure DevOps Server:
+    /// "NTLM" (default, works from Linux containers), "Negotiate" (needs Kerberos), or "Auto" (let .NET choose).
+    /// </summary>
+    public string AuthScheme { get; set; } = "NTLM";
+
     public bool Enabled { get; set; }
 
     /// <summary>REST API version. Prefer 7.1; older servers may need 6.0 or 5.1.</summary>
