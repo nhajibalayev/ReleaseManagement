@@ -244,6 +244,13 @@ a { color: var(--rm-accent); }
   top: 0.35rem;
 }
 
+/* Release history: dot colour by event kind */
+.history-timeline li.history-status::before { background: #0f6b6b; }
+.history-timeline li.history-edit::before { background: #6c757d; }
+.history-timeline li.history-readiness::before { background: #2a7de1; }
+.history-timeline li.history-assignment::before { background: #b8860b; }
+.history-timeline li.history-other::before { background: #adb5bd; }
+
 .table thead th {
   color: var(--rm-muted);
   font-weight: 600;

@@ -321,6 +321,9 @@ public sealed class ReleaseDetailsPageViewModel
 
     public IReadOnlyCollection<StatusHistoryItemViewModel> History { get; init; } = [];
 
+    /// <summary>Full audit trail (who created / edited / assigned / transitioned), newest first.</summary>
+    public IReadOnlyList<ReleaseHistoryEventViewModel> Timeline { get; init; } = [];
+
     public IReadOnlyCollection<CommentItemViewModel> Comments { get; init; } = [];
 
     public IReadOnlyCollection<AttachmentItemViewModel> Attachments { get; init; } = [];
@@ -471,6 +474,8 @@ public sealed class StatusHistoryItemViewModel
     public DateTime ChangedDate { get; init; }
 
     public string? ResponsibleRole { get; init; }
+
+    public string ChangedBy { get; init; } = string.Empty;
 }
 
 public sealed class ApprovalDecisionFormViewModel

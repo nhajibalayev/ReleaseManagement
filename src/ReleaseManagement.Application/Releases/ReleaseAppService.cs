@@ -117,6 +117,8 @@ public sealed class ReleaseAppService : IReleaseAppService
 
         await EnsureCatalogAsync(request, cancellationToken);
 
+        var before = DraftSnapshot.From(release);
+
         var now = _clock.UtcNow;
         release.ClearServices(now);
         ApplyServices(release, request.Services, now);
@@ -130,12 +132,16 @@ public sealed class ReleaseAppService : IReleaseAppService
 
         ApplyReferences(release, request.References, now);
 
+        var after = DraftSnapshot.From(release);
+
+        // History: only the fields that actually changed (old -> new).
+        var (oldValues, newValues) = DraftSnapshot.Diff(before, after);
         await _audit.WriteAsync(
             "Release.UpdateDraft",
             nameof(Release),
             release.Id.ToString(),
-            null,
-            new { release.Title, release.CurrentStatus, release.Category, release.ExecutionMode },
+            oldValues,
+            newValues,
             cancellationToken);
 
         await _dbContext.SaveChangesAsync(cancellationToken);
@@ -722,5 +728,62 @@ public sealed class ReleaseAppService : IReleaseAppService
 
             release.AddService(releaseService, now);
         }
+    }
+}
+
+/// <summary>Flat copy of the editable draft fields, used to write "old -> new" audit entries.</summary>
+internal sealed record DraftSnapshot(
+    string Title,
+    string Description,
+    string ReleaseType,
+    string Priority,
+    Guid EnvironmentId,
+    string ReleaseVersion,
+    string BusinessReason,
+    string Category,
+    string ExecutionMode,
+    DateTime PlannedWindowStart,
+    DateTime PlannedWindowEnd,
+    string RiskLevel,
+    bool DowntimeRequired,
+    int? ExpectedDowntimeMinutes,
+    int ServiceCount,
+    int ReferenceCount)
+{
+    public static DraftSnapshot From(Release release) => new(
+        release.Title,
+        release.Description,
+        release.ReleaseType.ToString(),
+        release.Priority.ToString(),
+        release.EnvironmentId,
+        release.ReleaseVersion,
+        release.BusinessReason,
+        release.Category.ToString(),
+        release.ExecutionMode.ToString(),
+        release.PlannedWindowStart,
+        release.PlannedWindowEnd,
+        release.RiskLevel.ToString(),
+        release.DowntimeRequired,
+        release.ExpectedDowntimeMinutes,
+        release.Services.Count,
+        release.References.Count);
+
+    /// <summary>Returns two dictionaries containing only the properties whose value changed.</summary>
+    public static (Dictionary<string, object?> Old, Dictionary<string, object?> New) Diff(DraftSnapshot before, DraftSnapshot after)
+    {
+        var oldValues = new Dictionary<string, object?>();
+        var newValues = new Dictionary<string, object?>();
+        foreach (var property in typeof(DraftSnapshot).GetProperties())
+        {
+            var oldValue = property.GetValue(before);
+            var newValue = property.GetValue(after);
+            if (!Equals(oldValue, newValue))
+            {
+                oldValues[property.Name] = oldValue;
+                newValues[property.Name] = newValue;
+            }
+        }
+
+        return (oldValues, newValues);
     }
 }

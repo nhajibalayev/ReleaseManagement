@@ -307,3 +307,11 @@ update `ReleaseWorkflowRules` + `ReleaseReadinessRules` + tests + `ReleaseStatus
 - `Web/Secrets/CorporateVault.cs`: `PL.Common.SecretVault` → `AddVaultWithKubernetes(builder.Configuration)`, compiled only with `-p:CorpVault=true` (`CORP_VAULT` build arg) because the package is internal-only. Skipped in Development.
 - `appsettings.json` has a `Vault` section placeholder (Address/Role/SecretPath) — key names unverified against the library.
 - Table for DevOps: `docs/CONFIGURATION.md`. Existing consumers (`AddInfrastructure`, Options) still read `IConfiguration` directly; `AppSecrets` is the validation gate + documented contract, not yet injected everywhere.
+
+## 16. Product scoping & release history (added 2026-10-05)
+
+- `Application/Authorization/IProductAccessService` (+ impl): `GetVisibleProductIdsAsync()` returns null for Admin/RM/Auditor (see all), else product ids from `UserProductAccess`. Applied in `ReleaseAppService.GetMyReleasesAsync` (feeds Dashboard / My / All), `ReadinessService.GetReleasesAwaitingMyReadinessAsync`, `DeploymentsController.Calendar`, `PostReleaseService.ListReviewsAsync`.
+- `ReleaseAuthorizationService.GetAccessLevelAsync`: no membership + not creator/assignee → None. `ProductAccessType`: View / CreateRelease (= "Edit" in UI) / Manage (edit any draft). Create requires >= CreateRelease (Admin exempt); wizard lists only such products.
+- Admin UI: `Products/Members` (`ProductsController.Members/SetMember/RemoveMember`), audited as `Product.Member*`.
+- History tab on `Releases/Details` = `AuditLogs` where EntityName=Release & EntityId=id, rendered by `Web/ViewModels/ReleaseHistoryViewModels.cs` (`ReleaseHistoryBuilder`). `Release.UpdateDraft` now writes a real old→new diff (`DraftSnapshot` in ReleaseAppService). Audit JSON stores enums as ints — builder maps Status/ControlType/Category/ExecutionMode/… back to names.
+- Demo seed: `po` = CreateRelease, control-owner users = View on the seeded product.

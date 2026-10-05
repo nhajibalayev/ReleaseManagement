@@ -615,12 +615,44 @@
         </div>
 
         <div class="tab-pane fade" id="history">
-            <ul class="timeline">
-                @foreach (var item in Model.History)
-                {
-                    <li><strong>@item.FromStatus → @item.ToStatus</strong><div class="small text-muted">@item.ChangedDate.ToLocalTime().ToString("g") · @(item.ResponsibleRole ?? "Unassigned")</div>@if (!string.IsNullOrWhiteSpace(item.Comment)) { <div class="mt-1">@item.Comment</div> }</li>
-                }
-            </ul>
+            @if (Model.Timeline.Count > 0)
+            {
+                <p class="text-muted small mb-3">Every change to this record: who did what, when, and what changed. Newest first.</p>
+                <ul class="timeline history-timeline">
+                    @foreach (var item in Model.Timeline)
+                    {
+                        <li class="history-@item.Kind">
+                            <div class="d-flex justify-content-between flex-wrap gap-2">
+                                <strong>@item.Action</strong>
+                                <span class="small text-muted">@item.OccurredAtUtc.ToLocalTime().ToString("g") · @item.Actor</span>
+                            </div>
+                            @if (item.Changes.Count > 0)
+                            {
+                                <ul class="small mb-0 mt-1 ps-3">
+                                    @foreach (var change in item.Changes)
+                                    {
+                                        <li>@change</li>
+                                    }
+                                </ul>
+                            }
+                            @if (!string.IsNullOrWhiteSpace(item.Comment))
+                            {
+                                <div class="mt-1 fst-italic">“@item.Comment”</div>
+                            }
+                        </li>
+                    }
+                </ul>
+            }
+            else
+            {
+                <ul class="timeline">
+                    @foreach (var item in Model.History)
+                    {
+                        <li><strong>@item.FromStatus → @item.ToStatus</strong><div class="small text-muted">@item.ChangedDate.ToLocalTime().ToString("g") · @item.ChangedBy · @(item.ResponsibleRole ?? "Unassigned")</div>@if (!string.IsNullOrWhiteSpace(item.Comment)) { <div class="mt-1">@item.Comment</div> }</li>
+                    }
+                    @if (Model.History.Count == 0) { <li class="text-muted">No history yet.</li> }
+                </ul>
+            }
         </div>
 
         <div class="tab-pane fade" id="deployment">

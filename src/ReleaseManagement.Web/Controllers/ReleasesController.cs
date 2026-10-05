@@ -604,14 +604,16 @@ public sealed class ReleasesController : Controller
             .Take(200)
             .ToListAsync(cancellationToken);
 
-        var userIds = comments.Select(item => item.UserId)
-            .Concat(new[] { details.TechnicalOwnerUserId ?? Guid.Empty, details.ReleaseManagerUserId ?? Guid.Empty })
-            .Where(item => item != Guid.Empty)
-            .Distinct()
-            .ToArray();
+        // Audit trail of this release: creation, edits, status changes, assignments, readiness updates.
+        var releaseKey = id.ToString();
+        var auditEntries = await _dbContext.AuditLogs.AsNoTracking()
+            .Where(item => item.EntityName == nameof(Release) && item.EntityId == releaseKey)
+            .OrderByDescending(item => item.CreatedDate)
+            .Take(500)
+            .ToListAsync(cancellationToken);
 
+        // All user names: comments, owners and every actor / assignee that appears in the audit trail.
         var userNames = await _dbContext.Users.AsNoTracking()
-            .Where(user => userIds.Contains(user.Id))
             .ToDictionaryAsync(user => user.Id, user => user.FullName, cancellationToken);
 
         var attachments = await _dbContext.ReleaseAttachments.AsNoTracking()
@@ -702,8 +704,10 @@ public sealed class ReleasesController : Controller
                 ToStatus = ReleaseStatusDisplay.Format(item.ToStatus),
                 Comment = item.Comment,
                 ChangedDate = item.ChangedDate,
-                ResponsibleRole = item.ResponsibleRole
+                ResponsibleRole = item.ResponsibleRole,
+                ChangedBy = userNames.GetValueOrDefault(item.ChangedByUserId, "Unknown user")
             }).ToArray(),
+            Timeline = ReleaseHistoryBuilder.Build(auditEntries, userNames),
             Comments = comments.Select(item => new CommentItemViewModel
             {
                 Id = item.Id,
