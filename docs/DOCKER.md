@@ -13,6 +13,10 @@ docker compose up --build   # первый раз ~5 минут (качает SD
 
 Открыть <http://localhost:8080>. Health-check: <http://localhost:8080/health>.
 
+Первый вход: **admin / ChangeMe!123** (встроенный локальный администратор, создаётся при старте,
+`AD_ALLOW_LOCAL_LOGIN=true`). Дальше: Administration → Users (роли) и Products → Members (доступ к продуктам).
+Пароль admin сменить после первого входа (пока — через `ADMIN_PASSWORD` в `.env` до первого запуска).
+
 Остановить: `docker compose down`. Логи: `docker compose logs -f web`.
 
 ## Что заполнить в .env
@@ -29,7 +33,9 @@ docker compose up --build   # первый раз ~5 минут (качает SD
 
 ## Миграции БД
 
-Контейнер **не** применяет миграции сам. Один раз с машины, где есть .NET SDK:
+По умолчанию в compose `APPLY_MIGRATIONS=true` — контейнер применяет миграции при старте (удобно для
+Docker Desktop и одной реплики). Для Kubernetes с несколькими репликами DevOps ставит
+`Seed__ApplyMigrations=false` и применяет миграции отдельным шагом:
 
 ```powershell
 dotnet ef database update --project src/ReleaseManagement.Infrastructure --startup-project src/ReleaseManagement.Web --connection "Host=...;Port=5432;Database=...;Username=...;Password=..."

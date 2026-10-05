@@ -182,9 +182,27 @@ public sealed class SeedOptions
 {
     public const string SectionName = "Seed";
 
+    /// <summary>Full development seed: demo users for every role, products, environments.</summary>
     public bool Enabled { get; set; }
 
     public string DefaultPassword { get; set; } = "ChangeMe!123";
+
+    /// <summary>
+    /// Always make sure one local Administrator account exists (also in production), so the first
+    /// person can sign in, assign roles and product memberships without touching the database.
+    /// Requires WindowsAuth:AllowLocalLogin = true when AD login is enabled. Change the password after first login.
+    /// </summary>
+    public bool BootstrapAdmin { get; set; } = true;
+
+    /// <summary>
+    /// Apply pending EF Core migrations at startup. Convenient for Docker Desktop / single-replica setups;
+    /// keep false in Kubernetes with several replicas and run migrations as a separate job instead.
+    /// </summary>
+    public bool ApplyMigrations { get; set; }
+
+    public string AdminUserName { get; set; } = "admin";
+
+    public string AdminPassword { get; set; } = "ChangeMe!123";
 }
 
 public sealed class HangfireOptions

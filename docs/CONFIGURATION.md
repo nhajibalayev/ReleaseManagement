@@ -22,6 +22,8 @@ is written to the log — values are never logged.
 | `AzureDevOps:WorkItemType` | `AzureDevOps__WorkItemType` | ConfigMap | no | `Task` / `Release` |
 | `AzureDevOps:ApiVersion` | `AzureDevOps__ApiVersion` | ConfigMap | no | `6.0` works on-prem |
 | `AzureDevOps:PersonalAccessToken` | `AzureDevOps__PersonalAccessToken` | **Vault** | no | Normally empty — signed-in user's AD creds (NTLM) are used |
+| `Seed:AdminPassword` | `Seed__AdminPassword` | **Vault** | no | Password of the built-in local `admin` (created on first start when `Seed:BootstrapAdmin=true`); change after first login |
+| `Seed:ApplyMigrations` | `Seed__ApplyMigrations` | ConfigMap | no | `true` = apply EF migrations at startup (single replica); `false` = separate migration job |
 | `Email:Password` | `Email__Password` | **Vault** | no | SMTP password, only if `Email:Enabled=true` |
 
 "Required" is checked for the active mode only: DemoMode needs nothing, Mock AD/ADO need no addresses.

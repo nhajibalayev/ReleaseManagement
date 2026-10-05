@@ -34,6 +34,10 @@ services:
       AzureDevOps__CreateWorkItemOnSubmit: ${ADO_CREATE_WORK_ITEM_ON_SUBMIT:-false}
       Hangfire__Enabled: "false"
       Seed__Enabled: ${SEED_ENABLED:-false}
+      Seed__ApplyMigrations: ${APPLY_MIGRATIONS:-true}
+      Seed__BootstrapAdmin: ${BOOTSTRAP_ADMIN:-true}
+      Seed__AdminUserName: ${ADMIN_USERNAME:-admin}
+      Seed__AdminPassword: "${ADMIN_PASSWORD:-ChangeMe!123}"
       DemoMode: ${DEMO_MODE:-false}
     volumes:
       - attachments:/app/App_Data/attachments

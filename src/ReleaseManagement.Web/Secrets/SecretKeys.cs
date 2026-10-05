@@ -116,6 +116,19 @@ public static class SecretKeys
         SecretSource.Vault,
         Required: false);
 
+    // ---------- Bootstrap / startup ----------
+    public static readonly SecretKey AdminPassword = new(
+        "Seed:AdminPassword",
+        "Password of the built-in local 'admin' account created on first start (Seed:BootstrapAdmin). Change after first login.",
+        SecretSource.Vault,
+        Required: false);
+
+    public static readonly SecretKey ApplyMigrations = new(
+        "Seed:ApplyMigrations",
+        "true = apply EF migrations at startup (single replica); false = run migrations as a separate job.",
+        SecretSource.ConfigMap,
+        Required: false);
+
     // ---------- Email ----------
     public static readonly SecretKey EmailPassword = new(
         "Email:Password",
@@ -139,6 +152,8 @@ public static class SecretKeys
         AdoWorkItemType,
         AdoApiVersion,
         AdoPersonalAccessToken,
+        AdminPassword,
+        ApplyMigrations,
         EmailPassword
     ];
 }

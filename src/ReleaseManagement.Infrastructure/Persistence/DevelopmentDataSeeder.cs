@@ -35,11 +35,76 @@ public sealed class DevelopmentDataSeeder
 
     public async Task SeedAsync(CancellationToken cancellationToken = default)
     {
-        if (!_options.Enabled)
+        if (_options.ApplyMigrations &&
+            _dbContext.Database.ProviderName != "Microsoft.EntityFrameworkCore.InMemory")
+        {
+            _logger.LogInformation("Applying pending database migrations (Seed:ApplyMigrations = true)");
+            await _dbContext.Database.MigrateAsync(cancellationToken);
+        }
+
+        if (_options.Enabled)
+        {
+            await SeedDevelopmentDataAsync(cancellationToken);
+        }
+
+        await EnsureBootstrapAdminAsync(cancellationToken);
+    }
+
+    /// <summary>
+    /// Guarantees a local Administrator account exists (Seed:BootstrapAdmin). Runs in every environment,
+    /// independent of the development seed, so the platform is usable right after the first deployment.
+    /// </summary>
+    private async Task EnsureBootstrapAdminAsync(CancellationToken cancellationToken)
+    {
+        if (!_options.BootstrapAdmin || string.IsNullOrWhiteSpace(_options.AdminUserName))
         {
             return;
         }
 
+        if (!await _roleManager.RoleExistsAsync(RoleNames.Administrator))
+        {
+            await _roleManager.CreateAsync(new IdentityRole<Guid>(RoleNames.Administrator));
+        }
+
+        var existing = await _userManager.FindByNameAsync(_options.AdminUserName);
+        if (existing is null)
+        {
+            existing = new AppIdentityUser
+            {
+                Id = Guid.NewGuid(),
+                UserName = _options.AdminUserName,
+                Email = $"{_options.AdminUserName}@local",
+                EmailConfirmed = true,
+                FullName = "System Administrator",
+                IsActive = true,
+                CreatedDate = DateTime.UtcNow,
+                UpdatedDate = DateTime.UtcNow
+            };
+
+            var createResult = await _userManager.CreateAsync(existing, _options.AdminPassword);
+            if (!createResult.Succeeded)
+            {
+                throw new InvalidOperationException(
+                    "Bootstrap admin could not be created: " +
+                    string.Join("; ", createResult.Errors.Select(error => error.Description)));
+            }
+
+            _logger.LogWarning(
+                "Bootstrap administrator '{UserName}' created with the configured default password. Change it after the first sign-in.",
+                _options.AdminUserName);
+        }
+
+        if (!await _userManager.IsInRoleAsync(existing, RoleNames.Administrator))
+        {
+            await _userManager.AddToRoleAsync(existing, RoleNames.Administrator);
+        }
+
+        await EnsureApplicationUserAsync(existing, cancellationToken);
+        await _dbContext.SaveChangesAsync(cancellationToken);
+    }
+
+    private async Task SeedDevelopmentDataAsync(CancellationToken cancellationToken)
+    {
         if (_dbContext.Database.ProviderName == "Microsoft.EntityFrameworkCore.InMemory")
         {
             await _dbContext.Database.EnsureCreatedAsync(cancellationToken);
