@@ -31,9 +31,11 @@ FROM mcr.microsoft.com/dotnet/aspnet:10.0 AS runtime
 WORKDIR /app
 
 # libldap is required by System.DirectoryServices.Protocols (AD login over LDAP on Linux).
-# Package name differs between Debian releases, so try both.
+# gss-ntlmssp + krb5 give GSSAPI an NTLM mechanism for Azure DevOps Server (used when managed NTLM is off).
+# Package names differ between Debian releases, so try alternatives.
 RUN apt-get update \
     && (apt-get install -y --no-install-recommends libldap2 || apt-get install -y --no-install-recommends libldap-2.5-0) \
+    && (apt-get install -y --no-install-recommends libgssapi-krb5-2 gss-ntlmssp || echo "gss-ntlmssp not available; relying on managed NTLM") \
     && rm -rf /var/lib/apt/lists/*
 
 # Same corporate CA certificates for runtime (LDAPS, DevOps Server, PostgreSQL over TLS).

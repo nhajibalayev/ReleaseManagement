@@ -1,6 +1,7 @@
 using System.Net;
 using System.Net.Http.Headers;
 using System.Text;
+using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 using ReleaseManagement.Infrastructure.Options;
 
@@ -42,13 +43,16 @@ public sealed class AzureDevOpsAuthHandler : HttpMessageHandler
 {
     private readonly IAzureDevOpsUserCredentialStore _credentialStore;
     private readonly AzureDevOpsOptions _options;
+    private readonly ILogger<AzureDevOpsAuthHandler> _logger;
 
     public AzureDevOpsAuthHandler(
         IAzureDevOpsUserCredentialStore credentialStore,
-        IOptions<AzureDevOpsOptions> options)
+        IOptions<AzureDevOpsOptions> options,
+        ILogger<AzureDevOpsAuthHandler> logger)
     {
         _credentialStore = credentialStore;
         _options = options.Value;
+        _logger = logger;
     }
 
     protected override async Task<HttpResponseMessage> SendAsync(
@@ -65,8 +69,14 @@ public sealed class AzureDevOpsAuthHandler : HttpMessageHandler
         var credential = _credentialStore.Get();
         if (credential is not null)
         {
-            handler.Credentials = credential.ToNetworkCredential();
+            var networkCredential = credential.ToNetworkCredential();
+            handler.Credentials = networkCredential;
             handler.PreAuthenticate = true;
+            _logger.LogDebug(
+                "Azure DevOps NTLM as domain='{Domain}' user='{User}' (managed NTLM: {Managed})",
+                networkCredential.Domain,
+                networkCredential.UserName,
+                AppContext.TryGetSwitch("System.Net.Security.UseManagedNtlm", out var managed) ? managed : (bool?)null);
         }
         else if (_options.UseWindowsCredentials)
         {
@@ -83,6 +93,15 @@ public sealed class AzureDevOpsAuthHandler : HttpMessageHandler
         // Buffer the response so the per-request handler can be disposed safely.
         using var invoker = new HttpMessageInvoker(handler, disposeHandler: false);
         using var response = await invoker.SendAsync(request, cancellationToken);
+
+        if (response.StatusCode == HttpStatusCode.Unauthorized)
+        {
+            // Which schemes the server offers tells us whether NTLM / Negotiate is even possible.
+            _logger.LogWarning(
+                "Azure DevOps responded 401 for {Url}. WWW-Authenticate: {Schemes}",
+                request.RequestUri,
+                string.Join(" | ", response.Headers.WwwAuthenticate.Select(header => header.ToString())));
+        }
         var buffered = new HttpResponseMessage(response.StatusCode)
         {
             ReasonPhrase = response.ReasonPhrase,

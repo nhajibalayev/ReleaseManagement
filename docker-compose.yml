@@ -34,6 +34,10 @@ services:
       AzureDevOps__RequireProjectAccessToCreate: ${ADO_REQUIRE_PROJECT_ACCESS:-true}
       AzureDevOps__CreateWorkItemOnSubmit: ${ADO_CREATE_WORK_ITEM_ON_SUBMIT:-false}
       Hangfire__Enabled: "false"
+      # NTLM implementation for Azure DevOps Server: true = .NET managed NTLM, false = GSSAPI (gss-ntlmssp)
+      DOTNET_SYSTEM_NET_SECURITY_USEMANAGEDNTLM: ${NTLM_MANAGED:-true}
+      Logging__LogLevel__ReleaseManagement.Infrastructure.AzureDevOps: Debug
+      Serilog__MinimumLevel__Override__ReleaseManagement.Infrastructure.AzureDevOps: Debug
       Seed__Enabled: ${SEED_ENABLED:-false}
       Seed__ApplyMigrations: ${APPLY_MIGRATIONS:-true}
       Seed__BootstrapAdmin: ${BOOTSTRAP_ADMIN:-true}
