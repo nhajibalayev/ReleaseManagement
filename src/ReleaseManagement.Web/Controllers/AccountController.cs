@@ -78,8 +78,13 @@ public sealed class AccountController : Controller
                 }
 
                 await _signInManager.SignInAsync(adUser, model.RememberMe);
+
+                // NTLM to DevOps Server wants the short (NetBIOS) domain; LDAP sign-in may have used the DNS domain.
+                var devOpsAccount = string.IsNullOrWhiteSpace(_windowsAuth.NetbiosDomain)
+                    ? adIdentity.DomainQualifiedName
+                    : $"{_windowsAuth.NetbiosDomain.Trim()}\\{adIdentity.UserName}";
                 _azureDevOpsCredentialStore.Save(
-                    new AzureDevOpsUserCredential(adIdentity.DomainQualifiedName, model.Password));
+                    new AzureDevOpsUserCredential(devOpsAccount, model.Password));
 
                 return RedirectAfterLogin(model.ReturnUrl);
             }

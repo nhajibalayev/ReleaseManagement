@@ -22,6 +22,7 @@ services:
       WindowsAuth__LdapPort: ${AD_LDAP_PORT:-0}
       WindowsAuth__LdapUseSsl: ${AD_LDAP_USE_SSL:-false}
       WindowsAuth__LdapSkipCertificateValidation: ${AD_LDAP_SKIP_CERT_VALIDATION:-false}
+      WindowsAuth__NetbiosDomain: ${AD_NETBIOS_DOMAIN:-}
       WindowsAuth__AllowLocalLogin: ${AD_ALLOW_LOCAL_LOGIN:-false}
       WindowsAuth__DefaultRole: ${AD_DEFAULT_ROLE:-ProductOwner}
       AzureDevOps__Enabled: ${ADO_ENABLED:-true}

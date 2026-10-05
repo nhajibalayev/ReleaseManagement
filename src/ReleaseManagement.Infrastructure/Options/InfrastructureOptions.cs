@@ -55,6 +55,12 @@ public sealed class WindowsAuthOptions
     /// <summary>Search base (e.g. DC=nh-nk,DC=az). Empty = read defaultNamingContext from RootDSE.</summary>
     public string LdapBaseDn { get; set; } = string.Empty;
 
+    /// <summary>
+    /// NetBIOS (short) domain name used for NTLM to Azure DevOps Server, e.g. TEST-NAMIQ.
+    /// When set, DevOps calls authenticate as NETBIOS\user even if the sign-in used the DNS domain.
+    /// </summary>
+    public string NetbiosDomain { get; set; } = string.Empty;
+
     public bool IsMock => string.Equals(Mode, "Mock", StringComparison.OrdinalIgnoreCase);
 }
 

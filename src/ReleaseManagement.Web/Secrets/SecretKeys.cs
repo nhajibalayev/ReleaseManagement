@@ -67,6 +67,12 @@ public static class SecretKeys
         SecretSource.ConfigMap,
         Required: false);
 
+    public static readonly SecretKey AdNetbiosDomain = new(
+        "WindowsAuth:NetbiosDomain",
+        "Short (NetBIOS) domain for NTLM to Azure DevOps Server, e.g. TEST-NAMIQ (echo %USERDOMAIN%).",
+        SecretSource.ConfigMap,
+        Required: false);
+
     public static readonly SecretKey AdLdapUseSsl = new(
         "WindowsAuth:LdapUseSsl",
         "true = LDAPS (636). Recommended; plain LDAP sends the password in clear text.",
@@ -144,6 +150,7 @@ public static class SecretKeys
         AdMode,
         AdDomain,
         AdLdapServer,
+        AdNetbiosDomain,
         AdLdapUseSsl,
         AdDefaultRole,
         AdoEnabled,

@@ -17,6 +17,12 @@
     <PackageReference Include="Serilog.AspNetCore" Version="10.0.0" />
   </ItemGroup>
 
+  <!-- Linux containers: use the managed NTLM implementation for Azure DevOps Server (NTLM/Negotiate)
+       instead of GSSAPI, which has no NTLM mechanism in the base image. -->
+  <ItemGroup>
+    <RuntimeHostConfigurationOption Include="System.Net.Security.UseManagedNtlm" Value="true" />
+  </ItemGroup>
+
   <!-- Corporate HashiCorp Vault client (internal NuGet only). Enable with: dotnet build -p:CorpVault=true -->
   <PropertyGroup>
     <CorpVault Condition="'$(CorpVault)' == ''">false</CorpVault>

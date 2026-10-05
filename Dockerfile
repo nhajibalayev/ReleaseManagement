@@ -51,7 +51,8 @@ RUN mkdir -p /app/App_Data/attachments /app/logs /app/keys
 
 ENV ASPNETCORE_URLS=http://+:8080 \
     ASPNETCORE_ENVIRONMENT=Production \
-    DOTNET_RUNNING_IN_CONTAINER=true
+    DOTNET_RUNNING_IN_CONTAINER=true \
+    DOTNET_SYSTEM_NET_SECURITY_USEMANAGEDNTLM=true
 
 EXPOSE 8080
 ENTRYPOINT ["dotnet", "ReleaseManagement.Web.dll"]
