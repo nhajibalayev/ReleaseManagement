@@ -40,6 +40,7 @@ public sealed class ReleasesController : Controller
     private readonly IAzureDevOpsReleaseSyncService _azureDevOpsSync;
     private readonly UserManager<AppIdentityUser> _userManager;
     private readonly ILogger<ReleasesController> _logger;
+    private readonly IProductAccessService _productAccess;
 
     public ReleasesController(
         IReleaseAppService releaseAppService,
@@ -56,7 +57,8 @@ public sealed class ReleasesController : Controller
         IAuditService audit,
         IAzureDevOpsReleaseSyncService azureDevOpsSync,
         UserManager<AppIdentityUser> userManager,
-        ILogger<ReleasesController> logger)
+        ILogger<ReleasesController> logger,
+        IProductAccessService productAccess)
     {
         _releaseAppService = releaseAppService;
         _workflowService = workflowService;
@@ -73,6 +75,7 @@ public sealed class ReleasesController : Controller
         _azureDevOpsSync = azureDevOpsSync;
         _userManager = userManager;
         _logger = logger;
+        _productAccess = productAccess;
     }
 
     [HttpGet]
@@ -754,8 +757,20 @@ public sealed class ReleasesController : Controller
         ReleaseWizardViewModel model,
         CancellationToken cancellationToken)
     {
-        model.Products = await _dbContext.Products.AsNoTracking()
-            .Where(item => item.IsActive)
+        var productQuery = _dbContext.Products.AsNoTracking()
+            .Where(item => item.IsActive);
+
+        // Only products where the user may create releases ("Edit" or "Manage" membership).
+        var creatableProductIds = await _productAccess.GetProductIdsWithAtLeastAsync(
+            ProductAccessType.CreateRelease,
+            cancellationToken);
+        if (creatableProductIds is not null && !_currentUser.IsInRole(RoleNames.Administrator))
+        {
+            var ids = creatableProductIds.ToArray();
+            productQuery = productQuery.Where(item => ids.Contains(item.Id));
+        }
+
+        model.Products = await productQuery
             .OrderBy(item => item.Name)
             .Select(item => new LookupItemViewModel { Id = item.Id, Name = item.Name })
             .ToListAsync(cancellationToken);

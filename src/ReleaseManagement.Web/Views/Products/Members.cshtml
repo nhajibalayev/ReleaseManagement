@@ -1,0 +1,99 @@
+@using ReleaseManagement.Web.Controllers.Admin
+@model ProductMembersViewModel
+@{
+    ViewData["Title"] = $"Members — {Model.ProductName}";
+    var levels = new[]
+    {
+        (Value: ProductAccessType.View, Label: "View", Help: "sees the product's releases, cannot create or edit"),
+        (Value: ProductAccessType.CreateRelease, Label: "Edit", Help: "creates releases and edits own drafts"),
+        (Value: ProductAccessType.Manage, Label: "Manage", Help: "edits any draft of the product")
+    };
+}
+
+<div class="mb-3">
+    <a asp-action="Index" class="text-decoration-none">&larr; Products</a>
+    <h1 class="h3 mb-1 mt-2">@Model.ProductName <code class="fs-6">@Model.ProductCode</code></h1>
+    <p class="text-muted mb-0">Who can see this product's releases. Release Managers, Administrators and Auditors see every product without being listed here.</p>
+</div>
+
+<div class="row g-4">
+    <div class="col-lg-8">
+        <section class="panel">
+            <h2 class="h5">Members</h2>
+            <div class="table-responsive">
+                <table class="table align-middle mb-0">
+                    <thead><tr><th>User</th><th>Access</th><th>Status</th><th></th></tr></thead>
+                    <tbody>
+                    @foreach (var member in Model.Members)
+                    {
+                        <tr>
+                            <td><span class="fw-semibold">@member.FullName</span><div class="small text-muted">@member.UserName</div></td>
+                            <td>
+                                <form asp-action="SetMember" asp-route-id="@Model.ProductId" method="post" class="d-flex gap-2 align-items-center">
+                                    <input type="hidden" name="userId" value="@member.UserId" />
+                                    <select name="accessType" class="form-select form-select-sm" style="max-width: 10rem">
+                                        @foreach (var level in levels)
+                                        {
+                                            <option value="@level.Value" selected="@(level.Value == member.AccessType)">@level.Label</option>
+                                        }
+                                    </select>
+                                    <button type="submit" class="btn btn-sm btn-outline-secondary">Save</button>
+                                </form>
+                            </td>
+                            <td><span class="status-badge @(member.IsActive ? "ok" : "danger")">@(member.IsActive ? "Active" : "Inactive")</span></td>
+                            <td class="text-end">
+                                <form asp-action="RemoveMember" asp-route-id="@Model.ProductId" method="post">
+                                    <input type="hidden" name="userId" value="@member.UserId" />
+                                    <button type="submit" class="btn btn-sm btn-outline-danger">Remove</button>
+                                </form>
+                            </td>
+                        </tr>
+                    }
+                    @if (Model.Members.Count == 0) { <tr><td colspan="4" class="text-center text-muted py-4">No members yet — nobody except RM / Admin / Auditor sees this product's releases.</td></tr> }
+                    </tbody>
+                </table>
+            </div>
+        </section>
+    </div>
+    <div class="col-lg-4">
+        <section class="panel">
+            <h2 class="h5">Add member</h2>
+            @if (Model.Candidates.Count == 0)
+            {
+                <p class="text-muted mb-0">All active users are already members.</p>
+            }
+            else
+            {
+                <form asp-action="SetMember" asp-route-id="@Model.ProductId" method="post">
+                    <div class="mb-3">
+                        <label for="userId" class="form-label">User</label>
+                        <select id="userId" name="userId" class="form-select" required>
+                            <option value="">— select —</option>
+                            @foreach (var candidate in Model.Candidates)
+                            {
+                                <option value="@candidate.UserId">@candidate.FullName (@candidate.UserName)</option>
+                            }
+                        </select>
+                    </div>
+                    <div class="mb-3">
+                        <label for="accessType" class="form-label">Access</label>
+                        <select id="accessType" name="accessType" class="form-select">
+                            @foreach (var level in levels)
+                            {
+                                <option value="@level.Value">@level.Label</option>
+                            }
+                        </select>
+                    </div>
+                    <button type="submit" class="btn btn-accent">Add</button>
+                </form>
+            }
+            <hr />
+            <dl class="small mb-0">
+                @foreach (var level in levels)
+                {
+                    <dt>@level.Label</dt><dd>@level.Help</dd>
+                }
+            </dl>
+        </section>
+    </div>
+</div>

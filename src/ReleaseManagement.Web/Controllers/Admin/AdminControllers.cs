@@ -6,6 +6,7 @@ using ReleaseManagement.Application.Abstractions;
 using ReleaseManagement.Application.Authorization;
 using ReleaseManagement.Domain.Constants;
 using ReleaseManagement.Domain.Entities;
+using ReleaseManagement.Domain.Enums;
 using ReleaseManagement.Infrastructure.Identity;
 
 namespace ReleaseManagement.Web.Controllers.Admin;
@@ -15,11 +16,131 @@ public sealed class ProductsController : Controller
 {
     private readonly IApplicationDbContext _dbContext;
     private readonly IClock _clock;
+    private readonly IAuditService _audit;
 
-    public ProductsController(IApplicationDbContext dbContext, IClock clock)
+    public ProductsController(IApplicationDbContext dbContext, IClock clock, IAuditService audit)
     {
         _dbContext = dbContext;
         _clock = clock;
+        _audit = audit;
+    }
+
+    /// <summary>Product members: who sees the product's releases and with which access level.</summary>
+    [HttpGet]
+    public async Task<IActionResult> Members(Guid id, CancellationToken cancellationToken)
+    {
+        var product = await _dbContext.Products.AsNoTracking()
+            .SingleOrDefaultAsync(item => item.Id == id, cancellationToken);
+        if (product is null)
+        {
+            return NotFound();
+        }
+
+        var accesses = await _dbContext.UserProductAccesses.AsNoTracking()
+            .Where(access => access.ProductId == id)
+            .ToListAsync(cancellationToken);
+
+        var users = await _dbContext.Users.AsNoTracking()
+            .OrderBy(user => user.FullName)
+            .Select(user => new { user.Id, user.UserName, user.FullName, user.IsActive })
+            .ToListAsync(cancellationToken);
+
+        var memberIds = accesses.Select(access => access.UserId).ToHashSet();
+        var members = users
+            .Where(user => memberIds.Contains(user.Id))
+            .Select(user => new ProductMemberViewModel(
+                user.Id,
+                user.UserName,
+                user.FullName,
+                user.IsActive,
+                accesses.First(access => access.UserId == user.Id).AccessType))
+            .ToList();
+
+        var candidates = users
+            .Where(user => !memberIds.Contains(user.Id) && user.IsActive)
+            .Select(user => new ProductMemberCandidateViewModel(user.Id, user.UserName, user.FullName))
+            .ToList();
+
+        return View(new ProductMembersViewModel(product.Id, product.Name, product.Code, members, candidates));
+    }
+
+    /// <summary>Adds a member or changes the access level of an existing one.</summary>
+    [HttpPost]
+    [ValidateAntiForgeryToken]
+    public async Task<IActionResult> SetMember(
+        Guid id,
+        Guid userId,
+        ProductAccessType accessType,
+        CancellationToken cancellationToken)
+    {
+        if (!Enum.IsDefined(accessType))
+        {
+            TempData["Error"] = "Unknown access level.";
+            return RedirectToAction(nameof(Members), new { id });
+        }
+
+        var productExists = await _dbContext.Products.AsNoTracking().AnyAsync(item => item.Id == id, cancellationToken);
+        var userExists = await _dbContext.Users.AsNoTracking().AnyAsync(user => user.Id == userId, cancellationToken);
+        if (!productExists || !userExists)
+        {
+            return NotFound();
+        }
+
+        var existing = await _dbContext.UserProductAccesses
+            .SingleOrDefaultAsync(access => access.ProductId == id && access.UserId == userId, cancellationToken);
+
+        var previous = existing?.AccessType;
+        if (existing is not null)
+        {
+            if (existing.AccessType == accessType)
+            {
+                TempData["Success"] = "No changes.";
+                return RedirectToAction(nameof(Members), new { id });
+            }
+
+            // AccessType is immutable on the entity: replace the row.
+            _dbContext.UserProductAccesses.Remove(existing);
+        }
+
+        _dbContext.UserProductAccesses.Add(new UserProductAccess(userId, id, accessType));
+
+        await _audit.WriteAsync(
+            previous is null ? "Product.MemberAdded" : "Product.MemberChanged",
+            nameof(Product),
+            id.ToString(),
+            previous is null ? null : new { UserId = userId, AccessType = previous.ToString() },
+            new { UserId = userId, AccessType = accessType.ToString() },
+            cancellationToken);
+
+        await _dbContext.SaveChangesAsync(cancellationToken);
+        TempData["Success"] = previous is null ? "Member added." : "Access level updated.";
+        return RedirectToAction(nameof(Members), new { id });
+    }
+
+    [HttpPost]
+    [ValidateAntiForgeryToken]
+    public async Task<IActionResult> RemoveMember(Guid id, Guid userId, CancellationToken cancellationToken)
+    {
+        var existing = await _dbContext.UserProductAccesses
+            .SingleOrDefaultAsync(access => access.ProductId == id && access.UserId == userId, cancellationToken);
+        if (existing is null)
+        {
+            return RedirectToAction(nameof(Members), new { id });
+        }
+
+        _dbContext.UserProductAccesses.Remove(existing);
+
+        await _audit.WriteAsync(
+            "Product.MemberRemoved",
+            nameof(Product),
+            id.ToString(),
+            new { UserId = userId, AccessType = existing.AccessType.ToString() },
+            null,
+            cancellationToken);
+
+        await _dbContext.SaveChangesAsync(cancellationToken);
+        TempData["Success"] = "Member removed.";
+        return RedirectToAction(nameof(Members), new { id });
     }
 
     [HttpGet]
@@ -257,3 +378,19 @@ public sealed record UserEditViewModel(
     IReadOnlyList<string> AllRoles,
     IReadOnlySet<string> AssignedRoles,
     bool IsSelf);
+
+public sealed record ProductMemberViewModel(
+    Guid UserId,
+    string UserName,
+    string FullName,
+    bool IsActive,
+    ProductAccessType AccessType);
+
+public sealed record ProductMemberCandidateViewModel(Guid UserId, string UserName, string FullName);
+
+public sealed record ProductMembersViewModel(
+    Guid ProductId,
+    string ProductName,
+    string ProductCode,
+    IReadOnlyList<ProductMemberViewModel> Members,
+    IReadOnlyList<ProductMemberCandidateViewModel> Candidates);

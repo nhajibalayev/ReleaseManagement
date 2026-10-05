@@ -45,6 +45,7 @@ public sealed class PostReleaseService : IPostReleaseService
     private readonly IClock _clock;
     private readonly IAuditService _audit;
     private readonly INotificationService _notifications;
+    private readonly IProductAccessService _productAccess;
 
     public PostReleaseService(
         IApplicationDbContext dbContext,
@@ -52,7 +53,8 @@ public sealed class PostReleaseService : IPostReleaseService
         IReleaseAuthorizationService authorization,
         IClock clock,
         IAuditService audit,
-        INotificationService notifications)
+        INotificationService notifications,
+        IProductAccessService productAccess)
     {
         _dbContext = dbContext;
         _currentUser = currentUser;
@@ -60,6 +62,7 @@ public sealed class PostReleaseService : IPostReleaseService
         _clock = clock;
         _audit = audit;
         _notifications = notifications;
+        _productAccess = productAccess;
     }
 
     public async Task RecordTechnicalValidationAsync(
@@ -395,13 +398,24 @@ public sealed class PostReleaseService : IPostReleaseService
             .ToListAsync(cancellationToken);
 
         var releaseIds = reviews.Select(item => item.ReleaseId).Distinct().ToArray();
-        var releases = await _dbContext.Releases
+        var releaseQuery = _dbContext.Releases
             .AsNoTracking()
-            .Where(item => releaseIds.Contains(item.Id))
+            .Where(item => releaseIds.Contains(item.Id));
+
+        // Product scoping: reviews of invisible products are dropped below.
+        var visibleProductIds = await _productAccess.GetVisibleProductIdsAsync(cancellationToken);
+        if (visibleProductIds is not null)
+        {
+            var productIds = visibleProductIds.ToArray();
+            releaseQuery = releaseQuery.Where(item => productIds.Contains(item.ProductId));
+        }
+
+        var releases = await releaseQuery
             .Select(item => new { item.Id, item.ReleaseNumber, item.Title })
             .ToDictionaryAsync(item => item.Id, cancellationToken);
 
         return reviews
+            .Where(review => visibleProductIds is null || releases.ContainsKey(review.ReleaseId))
             .Select(review =>
             {
                 var release = releases.GetValueOrDefault(review.ReleaseId);

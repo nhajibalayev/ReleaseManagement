@@ -114,7 +114,16 @@ public sealed class DevelopmentDataSeeder
                 await _userManager.AddToRoleAsync(identityUser, RoleNames.TechnicalOwner);
             }
 
-            if (user.Role == RoleNames.ProductOwner)
+            // Product membership (release visibility is product-scoped):
+            // PO = Edit (create releases), control owners = View; Admin / RM / Auditor see everything anyway.
+            var seededAccess = user.Role switch
+            {
+                RoleNames.ProductOwner => ProductAccessType.CreateRelease,
+                RoleNames.Administrator or RoleNames.ReleaseManager or RoleNames.Auditor => (ProductAccessType?)null,
+                _ => ProductAccessType.View
+            };
+
+            if (seededAccess is { } accessType)
             {
                 var exists = await _dbContext.UserProductAccesses.AnyAsync(
                     access => access.UserId == identityUser.Id && access.ProductId == productId,
@@ -123,10 +132,7 @@ public sealed class DevelopmentDataSeeder
                 if (!exists)
                 {
                     _dbContext.UserProductAccesses.Add(
-                        new UserProductAccess(
-                            identityUser.Id,
-                            productId,
-                            ProductAccessType.CreateRelease));
+                        new UserProductAccess(identityUser.Id, productId, accessType));
                 }
             }
         }

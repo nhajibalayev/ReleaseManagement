@@ -21,19 +21,22 @@ public sealed class DeploymentsController : Controller
     private readonly ICurrentUserService _currentUser;
     private readonly IClock _clock;
     private readonly IPlanningService _planning;
+    private readonly IProductAccessService _productAccess;
 
     public DeploymentsController(
         IApplicationDbContext dbContext,
         IReleaseWorkflowService workflow,
         ICurrentUserService currentUser,
         IClock clock,
-        IPlanningService planning)
+        IPlanningService planning,
+        IProductAccessService productAccess)
     {
         _dbContext = dbContext;
         _workflow = workflow;
         _currentUser = currentUser;
         _clock = clock;
         _planning = planning;
+        _productAccess = productAccess;
     }
 
     [HttpGet]
@@ -41,9 +44,19 @@ public sealed class DeploymentsController : Controller
     {
         var from = DateTime.UtcNow.Date.AddMonths(-1);
 
-        var releases = await _dbContext.Releases.AsNoTracking()
+        var calendarQuery = _dbContext.Releases.AsNoTracking()
             .Include(item => item.Services)
-            .Where(item => item.PlannedWindowEnd >= from)
+            .Where(item => item.PlannedWindowEnd >= from);
+
+        // Product scoping: the calendar shows only the current user's products.
+        var visibleProductIds = await _productAccess.GetVisibleProductIdsAsync(cancellationToken);
+        if (visibleProductIds is not null)
+        {
+            var productIds = visibleProductIds.ToArray();
+            calendarQuery = calendarQuery.Where(item => productIds.Contains(item.ProductId));
+        }
+
+        var releases = await calendarQuery
             .OrderBy(item => item.PlannedWindowStart)
             .Take(300)
             .ToListAsync(cancellationToken);

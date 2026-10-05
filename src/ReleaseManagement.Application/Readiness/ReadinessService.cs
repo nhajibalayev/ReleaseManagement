@@ -47,6 +47,7 @@ public sealed class ReadinessService : IReadinessService
     private readonly IClock _clock;
     private readonly IAuditService _audit;
     private readonly INotificationService _notifications;
+    private readonly IProductAccessService _productAccess;
 
     public ReadinessService(
         IApplicationDbContext dbContext,
@@ -54,7 +55,8 @@ public sealed class ReadinessService : IReadinessService
         IReleaseAuthorizationService authorization,
         IClock clock,
         IAuditService audit,
-        INotificationService notifications)
+        INotificationService notifications,
+        IProductAccessService productAccess)
     {
         _dbContext = dbContext;
         _currentUser = currentUser;
@@ -62,6 +64,7 @@ public sealed class ReadinessService : IReadinessService
         _clock = clock;
         _audit = audit;
         _notifications = notifications;
+        _productAccess = productAccess;
     }
 
     public async Task AddReferenceAsync(
@@ -443,11 +446,25 @@ public sealed class ReadinessService : IReadinessService
             return [];
         }
 
-        return await _dbContext.Releases
+        var query = _dbContext.Releases
             .AsNoTracking()
             .Where(release =>
                 releaseIds.Contains(release.Id) &&
-                release.CurrentStatus == ReleaseStatus.ReadinessInProgress)
+                release.CurrentStatus == ReleaseStatus.ReadinessInProgress);
+
+        // Product scoping: a QA/InfoSec/DBA member only works on releases of their own products.
+        var visibleProductIds = await _productAccess.GetVisibleProductIdsAsync(cancellationToken);
+        if (visibleProductIds is not null)
+        {
+            var productIds = visibleProductIds.ToArray();
+            var userId = _currentUser.UserId;
+            query = query.Where(release =>
+                productIds.Contains(release.ProductId) ||
+                release.CurrentResponsibleUserId == userId ||
+                release.TechnicalOwnerUserId == userId);
+        }
+
+        return await query
             .Select(release => release.Id)
             .ToListAsync(cancellationToken);
     }

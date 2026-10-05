@@ -13,15 +13,18 @@ public sealed class ReleaseAuthorizationService : IReleaseAuthorizationService
     private readonly IApplicationDbContext _dbContext;
     private readonly ICurrentUserService _currentUser;
     private readonly IAzureDevOpsProjectAccessService _azureDevOpsProjectAccess;
+    private readonly IProductAccessService _productAccess;
 
     public ReleaseAuthorizationService(
         IApplicationDbContext dbContext,
         ICurrentUserService currentUser,
-        IAzureDevOpsProjectAccessService azureDevOpsProjectAccess)
+        IAzureDevOpsProjectAccessService azureDevOpsProjectAccess,
+        IProductAccessService productAccess)
     {
         _dbContext = dbContext;
         _currentUser = currentUser;
         _azureDevOpsProjectAccess = azureDevOpsProjectAccess;
+        _productAccess = productAccess;
     }
 
     public async Task EnsureCanViewAsync(Guid releaseId, CancellationToken cancellationToken = default)
@@ -50,9 +53,18 @@ public sealed class ReleaseAuthorizationService : IReleaseAuthorizationService
     {
         EnsureAuthenticated();
 
-        // Open create: any signed-in user may create a release for any active product.
+        // Product membership with at least "Edit" (CreateRelease) is required; Administrator is exempt.
+        if (!_currentUser.IsInRole(RoleNames.Administrator))
+        {
+            var access = await _productAccess.GetAccessTypeAsync(productId, cancellationToken);
+            if (access is null || access < ProductAccessType.CreateRelease)
+            {
+                throw new ForbiddenException(
+                    "You do not have 'Edit' access to this product. Ask an administrator to add you as a product member.");
+            }
+        }
+
         // Azure DevOps project access is still checked when integration is enforced.
-        _ = productId;
         await _azureDevOpsProjectAccess.EnsureCurrentUserCanAccessProjectAsync(cancellationToken);
     }
 
@@ -98,14 +110,25 @@ public sealed class ReleaseAuthorizationService : IReleaseAuthorizationService
             return ReleaseAccessLevel.View;
         }
 
-        if (release.CreatedByUserId == _currentUser.UserId)
+        var isCreator = release.CreatedByUserId == _currentUser.UserId;
+        var isResponsibleUser = release.CurrentResponsibleUserId == _currentUser.UserId;
+        var productAccess = await _productAccess.GetAccessTypeAsync(release.ProductId, cancellationToken);
+
+        // Product scoping: unless the user is personally involved (creator / explicitly assigned),
+        // a release of a product they are not a member of does not exist for them.
+        if (!isCreator && !isResponsibleUser && productAccess is null)
         {
-            return release.CurrentStatus is ReleaseStatus.Draft or ReleaseStatus.ReturnedForRevision
-                ? ReleaseAccessLevel.Edit
-                : ReleaseAccessLevel.View;
+            return ReleaseAccessLevel.None;
         }
 
-        if (release.CurrentResponsibleUserId == _currentUser.UserId)
+        var isEditableStatus = release.CurrentStatus is ReleaseStatus.Draft or ReleaseStatus.ReturnedForRevision;
+
+        if (isCreator && isEditableStatus)
+        {
+            return ReleaseAccessLevel.Edit;
+        }
+
+        if (isResponsibleUser)
         {
             return ReleaseAccessLevel.Transition;
         }
@@ -121,22 +144,13 @@ public sealed class ReleaseAuthorizationService : IReleaseAuthorizationService
             return ReleaseAccessLevel.Transition;
         }
 
-        var productAccess = await _dbContext.UserProductAccesses
-            .AsNoTracking()
-            .Where(access =>
-                access.UserId == _currentUser.UserId &&
-                access.ProductId == release.ProductId)
-            .Select(access => (ProductAccessType?)access.AccessType)
-            .FirstOrDefaultAsync(cancellationToken);
-
-        if (productAccess is null)
+        // "Manage" members may edit any draft of their product; "Edit" members only their own (handled above).
+        if (productAccess == ProductAccessType.Manage && isEditableStatus)
         {
-            return ReleaseAccessLevel.None;
+            return ReleaseAccessLevel.Edit;
         }
 
-        return productAccess >= ProductAccessType.CreateRelease
-            ? ReleaseAccessLevel.View
-            : ReleaseAccessLevel.View;
+        return ReleaseAccessLevel.View;
     }
 
     public bool CanActOnStatus(ReleaseStatus status)

@@ -25,6 +25,7 @@ public sealed class ReleaseAppService : IReleaseAppService
     private readonly IPlanningService _planning;
     private readonly IValidator<CreateReleaseDraftRequest> _createValidator;
     private readonly IValidator<UpdateReleaseDraftRequest> _updateValidator;
+    private readonly IProductAccessService _productAccess;
 
     public ReleaseAppService(
         IApplicationDbContext dbContext,
@@ -35,7 +36,8 @@ public sealed class ReleaseAppService : IReleaseAppService
         IAuditService audit,
         IPlanningService planning,
         IValidator<CreateReleaseDraftRequest> createValidator,
-        IValidator<UpdateReleaseDraftRequest> updateValidator)
+        IValidator<UpdateReleaseDraftRequest> updateValidator,
+        IProductAccessService productAccess)
     {
         _dbContext = dbContext;
         _currentUser = currentUser;
@@ -46,6 +48,7 @@ public sealed class ReleaseAppService : IReleaseAppService
         _planning = planning;
         _createValidator = createValidator;
         _updateValidator = updateValidator;
+        _productAccess = productAccess;
     }
 
     public async Task<Guid> CreateDraftAsync(
@@ -348,19 +351,16 @@ public sealed class ReleaseAppService : IReleaseAppService
 
         var query = _dbContext.Releases.AsNoTracking();
 
-        if (!_currentUser.IsInRole(RoleNames.Administrator) &&
-            !_currentUser.IsInRole(RoleNames.ReleaseManager) &&
-            !_currentUser.IsInRole(RoleNames.Auditor))
+        // Product scoping: regular users see releases of their products only (plus releases they
+        // created or technically own). Administrator / ReleaseManager / Auditor see everything.
+        var visibleProductIds = await _productAccess.GetVisibleProductIdsAsync(cancellationToken);
+        if (visibleProductIds is not null)
         {
-            var accessibleProductIds = await _dbContext.UserProductAccesses
-                .AsNoTracking()
-                .Where(access => access.UserId == _currentUser.UserId)
-                .Select(access => access.ProductId)
-                .ToListAsync(cancellationToken);
-
+            var accessibleProductIds = visibleProductIds.ToArray();
+            var userId = _currentUser.UserId;
             query = query.Where(release =>
-                release.CreatedByUserId == _currentUser.UserId ||
-                release.TechnicalOwnerUserId == _currentUser.UserId ||
+                release.CreatedByUserId == userId ||
+                release.TechnicalOwnerUserId == userId ||
                 accessibleProductIds.Contains(release.ProductId));
         }
 

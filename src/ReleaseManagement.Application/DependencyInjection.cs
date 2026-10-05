@@ -17,6 +17,7 @@ public static class DependencyInjection
         services.AddValidatorsFromAssembly(typeof(DependencyInjection).Assembly);
 
         services.AddScoped<IReleaseAuthorizationService, ReleaseAuthorizationService>();
+        services.AddScoped<IProductAccessService, ProductAccessService>();
         services.AddScoped<IReleaseAppService, ReleaseAppService>();
         services.AddScoped<IReleaseWorkflowService, ReleaseWorkflowService>();
         services.AddScoped<IApprovalService, ApprovalService>();
