@@ -198,8 +198,9 @@
   const expeditedFields = document.getElementById("expedited-fields");
   if (executionMode && expeditedFields) {
     const toggle = () => {
-      const selected = executionMode.options[executionMode.selectedIndex]?.text ?? "";
-      expeditedFields.classList.toggle("d-none", selected !== "Expedited");
+      // Compare by enum value (2 = Expedited), not by display text, which has changed.
+      const selected = executionMode.value;
+      expeditedFields.classList.toggle("d-none", selected !== "2");
     };
 
     executionMode.addEventListener("change", toggle);
